@@ -9,6 +9,7 @@ import com.google.android.material.slider.Slider
 import com.mewsic.app.databinding.ItemBlankPageBinding
 import com.mewsic.app.databinding.PageHomeBinding
 import com.mewsic.app.databinding.PageLibraryBinding
+import com.mewsic.app.databinding.PagePlaylistBinding
 import com.mewsic.app.databinding.PageSettingsBinding
 import com.mewsic.app.scanner.LibraryStats
 import com.mewsic.app.util.UiScaleManager
@@ -16,9 +17,13 @@ import com.mewsic.app.util.UiScaleManager
 class MainPagerAdapter(
     private val homeAdapter: SongAdapter,
     private val libraryAdapter: SongAdapter,
+    private val playlistAdapter: PlaylistAdapter,
+    private val playlistSongsAdapter: SongAdapter,
     private val onExploreLibraryClicked: () -> Unit,
     private val onScaleChanged: (scale: Float) -> Unit,
-    private val onRescanClicked: () -> Unit
+    private val onRescanClicked: () -> Unit,
+    private val onCreatePlaylistClicked: () -> Unit,
+    private val onPlayAllPlaylistClicked: (playlistName: String) -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     companion object {
@@ -35,6 +40,7 @@ class MainPagerAdapter(
 
     private var homeViewHolder: HomeViewHolder? = null
     private var libraryViewHolder: LibraryViewHolder? = null
+    private var playlistViewHolder: PlaylistViewHolder? = null
     private var settingsViewHolder: SettingsViewHolder? = null
 
     fun updateData(stats: LibraryStats?, count: Int) {
@@ -45,6 +51,21 @@ class MainPagerAdapter(
         libraryViewHolder?.bind(totalTrackCount, hasSongs)
         settingsViewHolder?.bind(totalTrackCount)
     }
+
+    fun openPlaylistDetail(playlistName: String, songsCount: Int) {
+        playlistViewHolder?.showDetail(playlistName, songsCount)
+    }
+
+    fun closePlaylistDetail(): Boolean {
+        return if (playlistViewHolder?.isDetailOpen() == true) {
+            playlistViewHolder?.showOverview()
+            true
+        } else {
+            false
+        }
+    }
+
+    fun isPlaylistDetailOpen(): Boolean = playlistViewHolder?.isDetailOpen() == true
 
     override fun getItemCount(): Int = 5
 
@@ -60,6 +81,10 @@ class MainPagerAdapter(
             PAGE_LIBRARY -> {
                 val binding = PageLibraryBinding.inflate(inflater, parent, false)
                 LibraryViewHolder(binding)
+            }
+            PAGE_PLAYLIST -> {
+                val binding = PagePlaylistBinding.inflate(inflater, parent, false)
+                PlaylistViewHolder(binding)
             }
             PAGE_SETTINGS -> {
                 val binding = PageSettingsBinding.inflate(inflater, parent, false)
@@ -84,6 +109,10 @@ class MainPagerAdapter(
                 holder.init()
                 holder.bind(totalTrackCount, hasSongs)
             }
+            is PlaylistViewHolder -> {
+                playlistViewHolder = holder
+                holder.init()
+            }
             is SettingsViewHolder -> {
                 settingsViewHolder = holder
                 holder.init()
@@ -92,7 +121,6 @@ class MainPagerAdapter(
             is BlankViewHolder -> {
                 val title = when (position) {
                     PAGE_HARBOUR -> "Harbour\nDownload & Stream Music"
-                    PAGE_PLAYLIST -> "Playlists\nYour custom collections"
                     else -> ""
                 }
                 holder.bind(title)
@@ -157,6 +185,61 @@ class MainPagerAdapter(
                 binding.rvLibrarySongs.visibility = View.GONE
             }
         }
+    }
+
+    inner class PlaylistViewHolder(
+        val binding: PagePlaylistBinding
+    ) : RecyclerView.ViewHolder(binding.root) {
+
+        private var activePlaylistName: String? = null
+
+        fun init() {
+            if (binding.rvPlaylists.adapter == null) {
+                binding.rvPlaylists.layoutManager = LinearLayoutManager(itemView.context)
+                binding.rvPlaylists.adapter = playlistAdapter
+            }
+
+            if (binding.rvPlaylistSongs.adapter == null) {
+                binding.rvPlaylistSongs.layoutManager = LinearLayoutManager(itemView.context)
+                binding.rvPlaylistSongs.adapter = playlistSongsAdapter
+            }
+
+            binding.btnCreatePlaylistHeader.setOnClickListener {
+                onCreatePlaylistClicked()
+            }
+
+            binding.btnPlaylistBack.setOnClickListener {
+                showOverview()
+            }
+
+            binding.btnPlaylistPlayAll.setOnClickListener {
+                activePlaylistName?.let { onPlayAllPlaylistClicked(it) }
+            }
+        }
+
+        fun showDetail(playlistName: String, songsCount: Int) {
+            activePlaylistName = playlistName
+            binding.layoutPlaylistsOverview.visibility = View.GONE
+            binding.layoutPlaylistDetail.visibility = View.VISIBLE
+            binding.tvDetailPlaylistName.text = playlistName
+            binding.tvDetailPlaylistCount.text = "$songsCount ${if (songsCount == 1) "track" else "tracks"}"
+
+            if (songsCount == 0) {
+                binding.playlistSongsEmptyState.visibility = View.VISIBLE
+                binding.rvPlaylistSongs.visibility = View.GONE
+            } else {
+                binding.playlistSongsEmptyState.visibility = View.GONE
+                binding.rvPlaylistSongs.visibility = View.VISIBLE
+            }
+        }
+
+        fun showOverview() {
+            activePlaylistName = null
+            binding.layoutPlaylistsOverview.visibility = View.VISIBLE
+            binding.layoutPlaylistDetail.visibility = View.GONE
+        }
+
+        fun isDetailOpen(): Boolean = binding.layoutPlaylistDetail.visibility == View.VISIBLE
     }
 
     inner class SettingsViewHolder(

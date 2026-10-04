@@ -24,11 +24,13 @@ import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.widget.ImageView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.appcompat.widget.PopupMenu
 import android.view.HapticFeedbackConstants
-import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -37,6 +39,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.mewsic.app.adapter.MainPagerAdapter
+import com.mewsic.app.adapter.PlaylistAdapter
 import com.mewsic.app.adapter.SongAdapter
 import com.mewsic.app.databinding.ActivityMainBinding
 import com.mewsic.app.databinding.DialogBottomSheetSongOptionsBinding
@@ -44,6 +47,7 @@ import com.mewsic.app.databinding.DialogEditSongBinding
 import com.mewsic.app.model.Song
 import com.mewsic.app.scanner.LibraryCache
 import com.mewsic.app.scanner.MediaScanner
+import com.mewsic.app.scanner.PlaylistInfo
 import com.mewsic.app.scanner.PlaylistManager
 import com.mewsic.app.scanner.ThumbnailLoader
 import com.mewsic.app.util.UiScaleManager
@@ -72,6 +76,8 @@ class MainActivity : AppCompatActivity() {
     // Scanned Music Datasets
     private var allSongs: List<Song> = emptyList()
     private var recentSongs: List<Song> = emptyList()
+    private var currentOpenPlaylist: String? = null
+    private var currentPlaylistSongs: List<Song> = emptyList()
 
     private val homeSongAdapter by lazy {
         SongAdapter(
@@ -87,10 +93,30 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    private val playlistAdapter by lazy {
+        PlaylistAdapter(
+            onPlaylistClicked = { playlist ->
+                openPlaylist(playlist.name)
+            },
+            onPlaylistMoreClicked = { playlist, anchorView ->
+                showPlaylistMoreMenu(playlist, anchorView)
+            }
+        )
+    }
+
+    private val playlistSongsAdapter by lazy {
+        SongAdapter(
+            onSongClicked = { song, _ -> playSong(song) },
+            onSongLongClicked = { song, _ -> showSongOptions(song, inPlaylist = currentOpenPlaylist) }
+        )
+    }
+
     private val pagerAdapter by lazy {
         MainPagerAdapter(
             homeAdapter = homeSongAdapter,
             libraryAdapter = librarySongAdapter,
+            playlistAdapter = playlistAdapter,
+            playlistSongsAdapter = playlistSongsAdapter,
             onExploreLibraryClicked = {
                 binding.viewPager.setCurrentItem(MainPagerAdapter.PAGE_LIBRARY, true)
             },
@@ -99,6 +125,12 @@ class MainActivity : AppCompatActivity() {
             },
             onRescanClicked = {
                 onManualRescan()
+            },
+            onCreatePlaylistClicked = {
+                showCreatePlaylistDialog()
+            },
+            onPlayAllPlaylistClicked = { playlistName ->
+                playAllPlaylist(playlistName)
             }
         )
     }
@@ -158,8 +190,23 @@ class MainActivity : AppCompatActivity() {
         setupNavigation()
         setupPlayerBar()
 
+        // Handle system back navigation (e.g. exit playlist detail view back to playlist list)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (binding.viewPager.currentItem == MainPagerAdapter.PAGE_PLAYLIST && pagerAdapter.isPlaylistDetailOpen()) {
+                    pagerAdapter.closePlaylistDetail()
+                    currentOpenPlaylist = null
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        })
+
         // 1. Immediately load cached library so app already knows everything on cold start
         loadInitialCachedLibrary()
+        loadPlaylists()
 
         // 2. Start audio scanner concurrently so the app is fully ready while loading screen plays
         checkAndRequestAudioPermission()
@@ -338,6 +385,7 @@ class MainActivity : AppCompatActivity() {
         homeSongAdapter.submitList(recentSongs.take(20))
         librarySongAdapter.submitList(allSongs)
         pagerAdapter.updateData(stats, allSongs.size)
+        loadPlaylists()
 
         // Prime player bar with the most recently added song if idle
         if (currentPlayingSong == null && recentSongs.isNotEmpty()) {
@@ -360,6 +408,7 @@ class MainActivity : AppCompatActivity() {
         currentPlayingSong = song
         homeSongAdapter.activeSongId = song.id
         librarySongAdapter.activeSongId = song.id
+        playlistSongsAdapter.activeSongId = song.id
 
         // Update player bar info
         binding.tvPlayerTitle.text = song.title
@@ -413,7 +462,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun playNextSong() {
-        val list = if (binding.viewPager.currentItem == MainPagerAdapter.PAGE_HOME) recentSongs else allSongs
+        val list = when (binding.viewPager.currentItem) {
+            MainPagerAdapter.PAGE_HOME -> recentSongs
+            MainPagerAdapter.PAGE_PLAYLIST -> if (currentPlaylistSongs.isNotEmpty()) currentPlaylistSongs else allSongs
+            else -> allSongs
+        }
         if (list.isEmpty()) return
         val idx = list.indexOfFirst { it.id == currentPlayingSong?.id }
         val nextIdx = if (idx in 0 until list.size - 1) idx + 1 else 0
@@ -421,7 +474,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun playPrevSong() {
-        val list = if (binding.viewPager.currentItem == MainPagerAdapter.PAGE_HOME) recentSongs else allSongs
+        val list = when (binding.viewPager.currentItem) {
+            MainPagerAdapter.PAGE_HOME -> recentSongs
+            MainPagerAdapter.PAGE_PLAYLIST -> if (currentPlaylistSongs.isNotEmpty()) currentPlaylistSongs else allSongs
+            else -> allSongs
+        }
         if (list.isEmpty()) return
         val idx = list.indexOfFirst { it.id == currentPlayingSong?.id }
         val prevIdx = if (idx > 0) idx - 1 else list.size - 1
@@ -619,10 +676,110 @@ class MainActivity : AppCompatActivity() {
     }
 
     // =========================================================================
+    // Playlists & Detail View Management
+    // =========================================================================
+
+    private fun loadPlaylists() {
+        val playlists = PlaylistManager.getPlaylistInfos(this)
+        playlistAdapter.submitList(playlists)
+        currentOpenPlaylist?.let { name ->
+            refreshCurrentPlaylistSongs(name)
+        }
+    }
+
+    private fun openPlaylist(playlistName: String) {
+        currentOpenPlaylist = playlistName
+        refreshCurrentPlaylistSongs(playlistName)
+    }
+
+    private fun refreshCurrentPlaylistSongs(playlistName: String) {
+        val songIds = PlaylistManager.getPlaylistSongIds(this, playlistName)
+        currentPlaylistSongs = allSongs.filter { it.id in songIds }
+        playlistSongsAdapter.submitList(currentPlaylistSongs)
+        pagerAdapter.openPlaylistDetail(playlistName, currentPlaylistSongs.size)
+    }
+
+    private fun playAllPlaylist(playlistName: String) {
+        if (currentPlaylistSongs.isNotEmpty()) {
+            playSong(currentPlaylistSongs.first())
+        } else {
+            Toast.makeText(this, "Playlist is empty", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showPlaylistMoreMenu(playlist: PlaylistInfo, anchorView: View) {
+        val popup = PopupMenu(this, anchorView)
+        popup.menu.add(0, 1, 0, "Rename")
+        popup.menu.add(0, 2, 1, "Delete")
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> {
+                    showRenamePlaylistDialog(playlist.name)
+                    true
+                }
+                2 -> {
+                    showDeletePlaylistDialog(playlist.name)
+                    true
+                }
+                else -> false
+            }
+        }
+        popup.show()
+    }
+
+    private fun showRenamePlaylistDialog(oldName: String) {
+        val input = android.widget.EditText(this).apply {
+            setText(oldName)
+            selectAll()
+            setPadding(48, 32, 48, 32)
+            setTextColor(android.graphics.Color.WHITE)
+            setHintTextColor(android.graphics.Color.GRAY)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Rename Playlist")
+            .setView(input)
+            .setPositiveButton("Rename") { _, _ ->
+                val newName = input.text.toString().trim()
+                if (newName.isNotBlank() && newName != oldName) {
+                    val success = PlaylistManager.renamePlaylist(this, oldName, newName)
+                    if (success) {
+                        if (currentOpenPlaylist == oldName) {
+                            currentOpenPlaylist = newName
+                        }
+                        loadPlaylists()
+                        Toast.makeText(this, "Renamed to $newName", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this, "Playlist with that name already exists", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showDeletePlaylistDialog(playlistName: String) {
+        AlertDialog.Builder(this)
+            .setTitle("Delete Playlist")
+            .setMessage("Are you sure you want to delete \"$playlistName\"? The songs will remain on your device.")
+            .setPositiveButton("Delete") { _, _ ->
+                PlaylistManager.deletePlaylist(this, playlistName)
+                if (currentOpenPlaylist == playlistName) {
+                    pagerAdapter.closePlaylistDetail()
+                    currentOpenPlaylist = null
+                }
+                loadPlaylists()
+                Toast.makeText(this, "Deleted \"$playlistName\"", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // =========================================================================
     // Song Context Actions (Long Press Options: Delete, Edit, Add to Playlist)
     // =========================================================================
 
-    private fun showSongOptions(song: Song) {
+    private fun showSongOptions(song: Song, inPlaylist: String? = null) {
         window.decorView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
 
         val bottomSheetDialog = BottomSheetDialog(this, R.style.BottomSheetDialogTheme)
@@ -644,6 +801,20 @@ class MainActivity : AppCompatActivity() {
         sheetBinding.btnOptionAddToPlaylist.setOnClickListener {
             bottomSheetDialog.dismiss()
             showAddToPlaylistDialog(song)
+        }
+
+        // Optional: Remove from current playlist
+        if (inPlaylist != null) {
+            sheetBinding.btnOptionRemoveFromPlaylist.visibility = View.VISIBLE
+            sheetBinding.tvOptionRemoveFromPlaylistSubtitle.text = "Remove track from $inPlaylist"
+            sheetBinding.btnOptionRemoveFromPlaylist.setOnClickListener {
+                bottomSheetDialog.dismiss()
+                PlaylistManager.removeSongFromPlaylist(this, inPlaylist, song.id)
+                loadPlaylists()
+                Toast.makeText(this, "Removed from $inPlaylist", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            sheetBinding.btnOptionRemoveFromPlaylist.visibility = View.GONE
         }
 
         // 2. Edit song details
@@ -674,6 +845,7 @@ class MainActivity : AppCompatActivity() {
                 val selectedPlaylist = playlists[which]
                 val added = PlaylistManager.addSongToPlaylist(this, selectedPlaylist, song.id)
                 if (added) {
+                    loadPlaylists()
                     Toast.makeText(this, "Added to $selectedPlaylist", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(this, "Already in $selectedPlaylist", Toast.LENGTH_SHORT).show()
@@ -684,7 +856,7 @@ class MainActivity : AppCompatActivity() {
         builder.show()
     }
 
-    private fun showCreatePlaylistDialog(song: Song) {
+    private fun showCreatePlaylistDialog(song: Song? = null) {
         val input = android.widget.EditText(this).apply {
             hint = "Playlist Name"
             setPadding(48, 32, 48, 32)
@@ -695,12 +867,21 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("New Playlist")
             .setView(input)
-            .setPositiveButton("Create & Add") { _, _ ->
+            .setPositiveButton("Create") { _, _ ->
                 val name = input.text.toString().trim()
                 if (name.isNotBlank()) {
-                    PlaylistManager.createPlaylist(this, name)
-                    PlaylistManager.addSongToPlaylist(this, name, song.id)
-                    Toast.makeText(this, "Created & Added to $name", Toast.LENGTH_SHORT).show()
+                    val created = PlaylistManager.createPlaylist(this, name)
+                    if (created) {
+                        if (song != null) {
+                            PlaylistManager.addSongToPlaylist(this, name, song.id)
+                            Toast.makeText(this, "Created & Added to $name", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(this, "Created playlist \"$name\"", Toast.LENGTH_SHORT).show()
+                        }
+                        loadPlaylists()
+                    } else {
+                        Toast.makeText(this, "Playlist already exists", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
             .setNegativeButton("Cancel", null)

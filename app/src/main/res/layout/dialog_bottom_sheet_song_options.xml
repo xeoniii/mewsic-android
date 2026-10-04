@@ -125,6 +125,7 @@
             android:orientation="vertical">
 
             <TextView
+                android:id="@+id/tvOptionAddToPlaylistTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"
@@ -133,6 +134,7 @@
                 android:textSize="14sp" />
 
             <TextView
+                android:id="@+id/tvOptionAddToPlaylistSubtitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
@@ -188,6 +190,59 @@
                 android:layout_marginTop="2dp"
                 android:fontFamily="sans-serif"
                 android:text="Modify title, artist, or album info"
+                android:textColor="#64748B"
+                android:textSize="11.5sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Optional: Remove from Playlist Option (Shown when in a playlist) -->
+    <LinearLayout
+        android:id="@+id/btnOptionRemoveFromPlaylist"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_amber_icon_badge">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_playlist_remove"
+                app:tint="#F59E0B" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvOptionRemoveFromPlaylistTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-medium"
+                android:text="Remove from Playlist"
+                android:textColor="#F59E0B"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/tvOptionRemoveFromPlaylistSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:fontFamily="sans-serif"
+                android:text="Remove track from this playlist"
                 android:textColor="#64748B"
                 android:textSize="11.5sp" />
         </LinearLayout>
