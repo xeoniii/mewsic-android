@@ -2,17 +2,22 @@ package com.mewsic.app
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
+import android.animation.ArgbEvaluator
 import android.animation.Keyframe
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
 import android.animation.ValueAnimator
+import android.graphics.PorterDuff
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
+import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -25,20 +30,20 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private var loadAnimator: ObjectAnimator? = null
     private var glowAnimator: ObjectAnimator? = null
+    private val argbEvaluator = ArgbEvaluator()
 
     private data class NavTab(
         val touchTarget: View,
-        val circle: View,
-        val icon: View
+        val icon: ImageView
     )
 
     private val navTabs by lazy {
         listOf(
-            NavTab(binding.tabHome, binding.tabHomeCircle, binding.ivTabHome),
-            NavTab(binding.tabHarbour, binding.tabHarbourCircle, binding.ivTabHarbour),
-            NavTab(binding.tabLibrary, binding.tabLibraryCircle, binding.ivTabLibrary),
-            NavTab(binding.tabPlaylist, binding.tabPlaylistCircle, binding.ivTabPlaylist),
-            NavTab(binding.tabSettings, binding.tabSettingsCircle, binding.ivTabSettings)
+            NavTab(binding.tabHome, binding.ivTabHome),
+            NavTab(binding.tabHarbour, binding.ivTabHarbour),
+            NavTab(binding.tabLibrary, binding.ivTabLibrary),
+            NavTab(binding.tabPlaylist, binding.ivTabPlaylist),
+            NavTab(binding.tabSettings, binding.ivTabSettings)
         )
     }
 
@@ -67,31 +72,73 @@ class MainActivity : AppCompatActivity() {
         binding.viewPager.adapter = BlankPagesAdapter()
         binding.viewPager.offscreenPageLimit = 4
 
-        // Synchronize page swipes with top tabs
+        // Synchronize page swipes with top tabs via real-time smooth tracking
         binding.viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
+                super.onPageScrolled(position, positionOffset, positionOffsetPixels)
+                updateIndicator(position, positionOffset)
+            }
+
             override fun onPageSelected(position: Int) {
                 super.onPageSelected(position)
-                highlightTab(position)
+                triggerIconBounce(position)
             }
         })
 
-        // Connect tab clicks
+        // Connect tab clicks with tactile micro-bounce and smooth page scroll
         navTabs.forEachIndexed { index, tab ->
             tab.touchTarget.setOnClickListener {
+                triggerIconBounce(index)
                 binding.viewPager.setCurrentItem(index, true)
             }
         }
 
-        // Initialize Home tab as selected
-        highlightTab(0)
+        // Align indicator initial position once layout completes
+        binding.tabBarContainer.post {
+            updateIndicator(0, 0f)
+        }
     }
 
-    private fun highlightTab(position: Int) {
+    private fun updateIndicator(position: Int, positionOffset: Float) {
+        val totalWidth = binding.tabBarContainer.width.toFloat()
+        if (totalWidth <= 0 || navTabs.isEmpty()) return
+
+        val tabWidth = totalWidth / navTabs.size.toFloat()
+        val currentProgress = position.toFloat() + positionOffset
+        val targetCenterX = (currentProgress + 0.5f) * tabWidth
+
+        binding.activeIndicator.translationX = targetCenterX - (binding.activeIndicator.width / 2f)
+
+        // Smoothly interpolate icon colors
+        val activeColor = ContextCompat.getColor(this, R.color.tab_active_tint)
+        val inactiveColor = ContextCompat.getColor(this, R.color.tab_inactive_tint)
+
         navTabs.forEachIndexed { index, tab ->
-            val isSelected = (index == position)
-            tab.circle.isSelected = isSelected
-            tab.icon.isSelected = isSelected
+            val distance = kotlin.math.abs(currentProgress - index.toFloat())
+            val factor = (1f - distance).coerceIn(0f, 1f)
+            val blendedColor = argbEvaluator.evaluate(factor, inactiveColor, activeColor) as Int
+            tab.icon.setColorFilter(blendedColor, PorterDuff.Mode.SRC_IN)
         }
+    }
+
+    private fun triggerIconBounce(index: Int) {
+        val icon = navTabs.getOrNull(index)?.icon ?: return
+        icon.animate().cancel()
+        icon.scaleX = 0.8f
+        icon.scaleY = 0.8f
+        icon.animate()
+            .scaleX(1.18f)
+            .scaleY(1.18f)
+            .setDuration(180)
+            .setInterpolator(OvershootInterpolator(3.0f))
+            .withEndAction {
+                icon.animate()
+                    .scaleX(1.0f)
+                    .scaleY(1.0f)
+                    .setDuration(120)
+                    .start()
+            }
+            .start()
     }
 
     private fun startLoadingSequence() {
@@ -132,11 +179,6 @@ class MainActivity : AppCompatActivity() {
     private fun playLoadingProgressAnimation() {
         loadAnimator?.cancel()
 
-        // Keyframe timeline:
-        // 0.0s (0%)   -> Start at 0%
-        // 0.7s (45%)  -> Smoothly rushes to ~58%
-        // 1.0s (65%)  -> Realistic "hiccup" / hesitation (creeps slowly from 58% to 64%)
-        // 1.5s (100%) -> Accelerates smoothly to 100%
         val kf0 = Keyframe.ofFloat(0.0f, 0.0f).apply {
             interpolator = AccelerateDecelerateInterpolator()
         }
@@ -165,6 +207,16 @@ class MainActivity : AppCompatActivity() {
                             binding.loadingScreenContainer.visibility = View.GONE
                             binding.blankContentContainer.visibility = View.VISIBLE
                             glowAnimator?.cancel()
+
+                            // Premium floating entrance animation for top navigation bar
+                            binding.topBarWrapper.alpha = 0f
+                            binding.topBarWrapper.translationY = -40f
+                            binding.topBarWrapper.animate()
+                                .alpha(1f)
+                                .translationY(0f)
+                                .setDuration(450)
+                                .setInterpolator(DecelerateInterpolator())
+                                .start()
                         }
                         .start()
                 }
