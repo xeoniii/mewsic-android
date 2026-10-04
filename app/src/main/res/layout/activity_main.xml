@@ -29,123 +29,148 @@
             <LinearLayout
                 android:id="@+id/tabBarContainer"
                 android:layout_width="match_parent"
-                android:layout_height="58dp"
+                android:layout_height="64dp"
                 android:background="@drawable/bg_top_nav_container"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingStart="6dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="6dp"
-                android:paddingBottom="6dp">
+                android:paddingStart="8dp"
+                android:paddingTop="7dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="7dp">
 
-                <!-- Home Tab -->
+                <!-- 1. Home Tab -->
                 <FrameLayout
                     android:id="@+id/tabHome"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
                     android:layout_weight="1"
-                    android:background="@drawable/bg_nav_tab_selector"
                     android:clickable="true"
                     android:focusable="true">
 
-                    <ImageView
-                        android:id="@+id/ivTabHome"
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
+                    <FrameLayout
+                        android:id="@+id/tabHomeCircle"
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
                         android:layout_gravity="center"
-                        android:scaleType="fitCenter"
-                        android:src="@drawable/ic_tab_home"
-                        app:tint="@color/nav_tab_tint_selector" />
+                        android:background="@drawable/bg_nav_tab_selector">
+
+                        <ImageView
+                            android:id="@+id/ivTabHome"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_gravity="center"
+                            android:scaleType="fitCenter"
+                            android:src="@drawable/ic_tab_home"
+                            app:tint="@color/nav_tab_tint_selector" />
+                    </FrameLayout>
                 </FrameLayout>
 
-                <!-- Library Tab -->
-                <FrameLayout
-                    android:id="@+id/tabLibrary"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_nav_tab_selector"
-                    android:clickable="true"
-                    android:focusable="true">
-
-                    <ImageView
-                        android:id="@+id/ivTabLibrary"
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:layout_gravity="center"
-                        android:scaleType="fitCenter"
-                        android:src="@drawable/ic_tab_library"
-                        app:tint="@color/nav_tab_tint_selector" />
-                </FrameLayout>
-
-                <!-- Playlist Tab -->
-                <FrameLayout
-                    android:id="@+id/tabPlaylist"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_nav_tab_selector"
-                    android:clickable="true"
-                    android:focusable="true">
-
-                    <ImageView
-                        android:id="@+id/ivTabPlaylist"
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:layout_gravity="center"
-                        android:scaleType="fitCenter"
-                        android:src="@drawable/ic_tab_playlist"
-                        app:tint="@color/nav_tab_tint_selector" />
-                </FrameLayout>
-
-                <!-- Harbour Tab -->
+                <!-- 2. Harbour / Globe Tab -->
                 <FrameLayout
                     android:id="@+id/tabHarbour"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
                     android:layout_weight="1"
-                    android:background="@drawable/bg_nav_tab_selector"
                     android:clickable="true"
                     android:focusable="true">
 
-                    <ImageView
-                        android:id="@+id/ivTabHarbour"
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
+                    <FrameLayout
+                        android:id="@+id/tabHarbourCircle"
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
                         android:layout_gravity="center"
-                        android:scaleType="fitCenter"
-                        android:src="@drawable/ic_tab_harbour"
-                        app:tint="@color/nav_tab_tint_selector" />
+                        android:background="@drawable/bg_nav_tab_selector">
+
+                        <ImageView
+                            android:id="@+id/ivTabHarbour"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_gravity="center"
+                            android:scaleType="fitCenter"
+                            android:src="@drawable/ic_tab_harbour"
+                            app:tint="@color/nav_tab_tint_selector" />
+                    </FrameLayout>
                 </FrameLayout>
 
-                <!-- Settings Tab -->
+                <!-- 3. Library Tab -->
+                <FrameLayout
+                    android:id="@+id/tabLibrary"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <FrameLayout
+                        android:id="@+id/tabLibraryCircle"
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_nav_tab_selector">
+
+                        <ImageView
+                            android:id="@+id/ivTabLibrary"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_gravity="center"
+                            android:scaleType="fitCenter"
+                            android:src="@drawable/ic_tab_library"
+                            app:tint="@color/nav_tab_tint_selector" />
+                    </FrameLayout>
+                </FrameLayout>
+
+                <!-- 4. Playlist Tab -->
+                <FrameLayout
+                    android:id="@+id/tabPlaylist"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <FrameLayout
+                        android:id="@+id/tabPlaylistCircle"
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_nav_tab_selector">
+
+                        <ImageView
+                            android:id="@+id/ivTabPlaylist"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_gravity="center"
+                            android:scaleType="fitCenter"
+                            android:src="@drawable/ic_tab_playlist"
+                            app:tint="@color/nav_tab_tint_selector" />
+                    </FrameLayout>
+                </FrameLayout>
+
+                <!-- 5. Settings Tab -->
                 <FrameLayout
                     android:id="@+id/tabSettings"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
                     android:layout_weight="1"
-                    android:background="@drawable/bg_nav_tab_selector"
                     android:clickable="true"
                     android:focusable="true">
 
-                    <ImageView
-                        android:id="@+id/ivTabSettings"
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
+                    <FrameLayout
+                        android:id="@+id/tabSettingsCircle"
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
                         android:layout_gravity="center"
-                        android:scaleType="fitCenter"
-                        android:src="@drawable/ic_tab_settings"
-                        app:tint="@color/nav_tab_tint_selector" />
+                        android:background="@drawable/bg_nav_tab_selector">
+
+                        <ImageView
+                            android:id="@+id/ivTabSettings"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_gravity="center"
+                            android:scaleType="fitCenter"
+                            android:src="@drawable/ic_tab_settings"
+                            app:tint="@color/nav_tab_tint_selector" />
+                    </FrameLayout>
                 </FrameLayout>
 
             </LinearLayout>

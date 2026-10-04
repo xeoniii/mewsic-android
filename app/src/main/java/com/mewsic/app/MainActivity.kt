@@ -12,7 +12,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -28,17 +27,18 @@ class MainActivity : AppCompatActivity() {
     private var glowAnimator: ObjectAnimator? = null
 
     private data class NavTab(
-        val container: View,
+        val touchTarget: View,
+        val circle: View,
         val icon: View
     )
 
     private val navTabs by lazy {
         listOf(
-            NavTab(binding.tabHome, binding.ivTabHome),
-            NavTab(binding.tabLibrary, binding.ivTabLibrary),
-            NavTab(binding.tabPlaylist, binding.ivTabPlaylist),
-            NavTab(binding.tabHarbour, binding.ivTabHarbour),
-            NavTab(binding.tabSettings, binding.ivTabSettings)
+            NavTab(binding.tabHome, binding.tabHomeCircle, binding.ivTabHome),
+            NavTab(binding.tabHarbour, binding.tabHarbourCircle, binding.ivTabHarbour),
+            NavTab(binding.tabLibrary, binding.tabLibraryCircle, binding.ivTabLibrary),
+            NavTab(binding.tabPlaylist, binding.tabPlaylistCircle, binding.ivTabPlaylist),
+            NavTab(binding.tabSettings, binding.tabSettingsCircle, binding.ivTabSettings)
         )
     }
 
@@ -77,7 +77,7 @@ class MainActivity : AppCompatActivity() {
 
         // Connect tab clicks
         navTabs.forEachIndexed { index, tab ->
-            tab.container.setOnClickListener {
+            tab.touchTarget.setOnClickListener {
                 binding.viewPager.setCurrentItem(index, true)
             }
         }
@@ -89,7 +89,7 @@ class MainActivity : AppCompatActivity() {
     private fun highlightTab(position: Int) {
         navTabs.forEachIndexed { index, tab ->
             val isSelected = (index == position)
-            tab.container.isSelected = isSelected
+            tab.circle.isSelected = isSelected
             tab.icon.isSelected = isSelected
         }
     }
@@ -180,9 +180,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private class BlankPagesAdapter : RecyclerView.Adapter<BlankPagesAdapter.PageViewHolder>() {
-        private val pageTitles = listOf("Home", "Library", "Playlist", "Harbour", "Settings")
-
-        override fun getItemCount(): Int = pageTitles.size
+        override fun getItemCount(): Int = 5
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PageViewHolder {
             val view = LayoutInflater.from(parent.context).inflate(R.layout.item_blank_page, parent, false)
@@ -190,8 +188,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-            val tvPageTitle = holder.itemView.findViewById<TextView>(R.id.tvPageTitle)
-            tvPageTitle?.text = pageTitles[position]
+            // Blank canvas ready for custom UI design
         }
 
         class PageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView)

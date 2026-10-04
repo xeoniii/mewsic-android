@@ -24,11 +24,11 @@
     <color name="status_bar_color">#080C14</color>
     <color name="nav_bar_color">#080C14</color>
 
-    <!-- Top Navigation Bar & Tabs -->
-    <color name="nav_bar_container_bg">#101520</color>
-    <color name="nav_bar_container_border">#1D2636</color>
-    <color name="tab_active_bg">#0E2A1E</color>
-    <color name="tab_active_stroke">#1BD96A</color>
-    <color name="tab_active_tint">#1BD96A</color>
-    <color name="tab_inactive_tint">#8A96A8</color>
+    <!-- Top Navigation Bar & Tabs (Sampled from Screenshot) -->
+    <color name="nav_bar_container_bg">#10181B</color>
+    <color name="nav_bar_container_border">#162024</color>
+    <color name="tab_active_bg">#123426</color>
+    <color name="tab_active_stroke">#123426</color>
+    <color name="tab_active_tint">#1ADA6B</color>
+    <color name="tab_inactive_tint">#898D8E</color>
 </resources>
