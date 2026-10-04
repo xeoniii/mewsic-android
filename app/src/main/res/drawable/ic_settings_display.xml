@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Monitor / Display Screen Icon -->
+    <path
+        android:fillColor="#1ADA6B"
+        android:pathData="M20,3H4C2.89,3 2,3.89 2,5v10c0,1.11 0.89,2 2,2h6v2H8v2h8v-2h-2v-2h6c1.11,0 2,-0.89 2,-2V5C22,3.89 21.11,3 20,3zM20,15H4V5h16V15z" />
+</vector>

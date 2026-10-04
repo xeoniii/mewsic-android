@@ -5,15 +5,20 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.slider.Slider
 import com.mewsic.app.databinding.ItemBlankPageBinding
 import com.mewsic.app.databinding.PageHomeBinding
 import com.mewsic.app.databinding.PageLibraryBinding
+import com.mewsic.app.databinding.PageSettingsBinding
 import com.mewsic.app.scanner.LibraryStats
+import com.mewsic.app.util.UiScaleManager
 
 class MainPagerAdapter(
     private val homeAdapter: SongAdapter,
     private val libraryAdapter: SongAdapter,
-    private val onExploreLibraryClicked: () -> Unit
+    private val onExploreLibraryClicked: () -> Unit,
+    private val onScaleChanged: (scale: Float) -> Unit,
+    private val onRescanClicked: () -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     companion object {
@@ -30,6 +35,7 @@ class MainPagerAdapter(
 
     private var homeViewHolder: HomeViewHolder? = null
     private var libraryViewHolder: LibraryViewHolder? = null
+    private var settingsViewHolder: SettingsViewHolder? = null
 
     fun updateData(stats: LibraryStats?, count: Int) {
         currentStats = stats
@@ -37,6 +43,7 @@ class MainPagerAdapter(
         hasSongs = count > 0
         homeViewHolder?.bind(currentStats, hasSongs)
         libraryViewHolder?.bind(totalTrackCount, hasSongs)
+        settingsViewHolder?.bind(totalTrackCount)
     }
 
     override fun getItemCount(): Int = 5
@@ -53,6 +60,10 @@ class MainPagerAdapter(
             PAGE_LIBRARY -> {
                 val binding = PageLibraryBinding.inflate(inflater, parent, false)
                 LibraryViewHolder(binding)
+            }
+            PAGE_SETTINGS -> {
+                val binding = PageSettingsBinding.inflate(inflater, parent, false)
+                SettingsViewHolder(binding)
             }
             else -> {
                 val binding = ItemBlankPageBinding.inflate(inflater, parent, false)
@@ -73,11 +84,15 @@ class MainPagerAdapter(
                 holder.init()
                 holder.bind(totalTrackCount, hasSongs)
             }
+            is SettingsViewHolder -> {
+                settingsViewHolder = holder
+                holder.init()
+                holder.bind(totalTrackCount)
+            }
             is BlankViewHolder -> {
                 val title = when (position) {
                     PAGE_HARBOUR -> "Harbour\nDownload & Stream Music"
                     PAGE_PLAYLIST -> "Playlists\nYour custom collections"
-                    PAGE_SETTINGS -> "Settings\nApp Preferences"
                     else -> ""
                 }
                 holder.bind(title)
@@ -141,6 +156,62 @@ class MainPagerAdapter(
                 binding.libraryEmptyState.visibility = View.VISIBLE
                 binding.rvLibrarySongs.visibility = View.GONE
             }
+        }
+    }
+
+    inner class SettingsViewHolder(
+        val binding: PageSettingsBinding
+    ) : RecyclerView.ViewHolder(binding.root) {
+
+        private var isInitialized = false
+
+        fun init() {
+            if (isInitialized) return
+            isInitialized = true
+
+            val context = itemView.context
+            val currentScale = UiScaleManager.getScale(context)
+
+            // Setup Slider with current scale
+            val sliderVal = currentScale.coerceIn(0.75f, 1.25f)
+            binding.sliderUiScale.value = sliderVal
+            binding.tvScaleValue.text = UiScaleManager.getScaleLabel(sliderVal)
+
+            // Live updates as the slider slides
+            binding.sliderUiScale.addOnChangeListener { _, value, _ ->
+                binding.tvScaleValue.text = UiScaleManager.getScaleLabel(value)
+            }
+
+            // Presets
+            binding.btnPresetCompact.setOnClickListener {
+                binding.sliderUiScale.value = UiScaleManager.SCALE_COMPACT
+                binding.tvScaleValue.text = UiScaleManager.getScaleLabel(UiScaleManager.SCALE_COMPACT)
+            }
+
+            binding.btnPresetDefault.setOnClickListener {
+                binding.sliderUiScale.value = UiScaleManager.SCALE_DEFAULT
+                binding.tvScaleValue.text = UiScaleManager.getScaleLabel(UiScaleManager.SCALE_DEFAULT)
+            }
+
+            binding.btnPresetLarge.setOnClickListener {
+                binding.sliderUiScale.value = UiScaleManager.SCALE_LARGE
+                binding.tvScaleValue.text = UiScaleManager.getScaleLabel(UiScaleManager.SCALE_LARGE)
+            }
+
+            // Apply Scale button
+            binding.btnApplyScale.setOnClickListener {
+                val selectedScale = binding.sliderUiScale.value
+                onScaleChanged(selectedScale)
+            }
+
+            // Rescan Library button
+            binding.btnRescanLibrary.setOnClickListener {
+                onRescanClicked()
+            }
+        }
+
+        fun bind(trackCount: Int) {
+            binding.tvSettingsTrackCount.text = "$trackCount tracks indexed"
         }
     }
 

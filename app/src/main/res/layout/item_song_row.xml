@@ -44,7 +44,7 @@
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
+        android:layout_weight="1.5"
         android:orientation="vertical">
 
         <TextView
@@ -75,9 +75,9 @@
         android:id="@+id/tvSongAlbum"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_weight="0.8"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="12dp"
+        android:layout_weight="0.45"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
         android:ellipsize="end"
         android:maxLines="1"
         android:textColor="#64748B"

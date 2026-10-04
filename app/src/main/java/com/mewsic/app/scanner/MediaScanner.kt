@@ -125,7 +125,7 @@ object MediaScanner {
         val h = totalDurationSeconds / 3600
         val m = (totalDurationSeconds % 3600) / 60
         val s = totalDurationSeconds % 60
-        val formatted = if (h > 0) "${h}h ${m}m ${s}s" else "${m}m ${s}s"
+        val formatted = if (h > 0) "${h}h ${m}m" else "${m}m ${s}s"
 
         return LibraryStats(
             totalTracks = totalTracks,

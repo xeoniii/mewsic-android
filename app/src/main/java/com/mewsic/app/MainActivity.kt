@@ -8,19 +8,25 @@ import android.animation.Keyframe
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
 import android.animation.ValueAnimator
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Outline
 import android.graphics.PorterDuff
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.view.ViewOutlineProvider
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -34,11 +40,17 @@ import com.mewsic.app.model.Song
 import com.mewsic.app.scanner.LibraryCache
 import com.mewsic.app.scanner.MediaScanner
 import com.mewsic.app.scanner.ThumbnailLoader
+import com.mewsic.app.util.UiScaleManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
+
+    companion object {
+        const val EXTRA_START_TAB = "extra_start_tab"
+        const val EXTRA_SKIP_LOADING = "extra_skip_loading"
+    }
 
     private lateinit var binding: ActivityMainBinding
     private var loadAnimator: ObjectAnimator? = null
@@ -69,6 +81,12 @@ class MainActivity : AppCompatActivity() {
             libraryAdapter = librarySongAdapter,
             onExploreLibraryClicked = {
                 binding.viewPager.setCurrentItem(MainPagerAdapter.PAGE_LIBRARY, true)
+            },
+            onScaleChanged = { newScale ->
+                applyUiScale(newScale)
+            },
+            onRescanClicked = {
+                onManualRescan()
             }
         )
     }
@@ -97,11 +115,23 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    override fun attachBaseContext(newBase: Context) {
+        val wrapped = UiScaleManager.wrapContext(newBase)
+        super.attachBaseContext(wrapped)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Enforce dark mode explicitly across all vendor skins (MIUI, ColorOS, OneUI)
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
         super.onCreate(savedInstanceState)
 
         // Enable edge-to-edge transparent system bars
         WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // Prevent Android 10+ / MIUI Smart Dark Mode from auto-inverting custom dark colors
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.decorView.isForceDarkAllowed = false
+        }
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -116,11 +146,27 @@ class MainActivity : AppCompatActivity() {
         setupNavigation()
         setupPlayerBar()
 
-        // 1. Immediately load cached library so app already knows everything on launch
+        // 1. Immediately load cached library so app already knows everything on cold start
         loadInitialCachedLibrary()
 
-        // 2. Start cold-start branding animation
-        startLoadingSequence()
+        // 2. Start audio scanner concurrently so the app is fully ready while loading screen plays
+        checkAndRequestAudioPermission()
+
+        // Check if loading sequence should be skipped (e.g., after scale restart)
+        val skipLoading = intent.getBooleanExtra(EXTRA_SKIP_LOADING, false)
+        val startTab = intent.getIntExtra(EXTRA_START_TAB, MainPagerAdapter.PAGE_HOME)
+
+        if (skipLoading) {
+            binding.loadingScreenContainer.visibility = View.GONE
+            binding.blankContentContainer.visibility = View.VISIBLE
+            binding.viewPager.setCurrentItem(startTab, false)
+            binding.tabBarContainer.post {
+                updateIndicator(startTab, 0f)
+            }
+        } else {
+            // Cold start branding animation
+            startLoadingSequence()
+        }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -132,6 +178,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupNavigation() {
+        // Explicitly set indicator background color to prevent vendor inversion
+        binding.activeIndicator.background?.setTint(ContextCompat.getColor(this, R.color.tab_active_bg))
+
         // Setup ViewPager2 with MainPagerAdapter (Home, Harbour, Library, Playlist, Settings)
         binding.viewPager.adapter = pagerAdapter
         binding.viewPager.offscreenPageLimit = 4
@@ -240,6 +289,11 @@ class MainActivity : AppCompatActivity() {
         } else {
             permissionLauncher.launch(permission)
         }
+    }
+
+    private fun onManualRescan() {
+        Toast.makeText(this, "Scanning media on device...", Toast.LENGTH_SHORT).show()
+        checkAndRequestAudioPermission()
     }
 
     /**
@@ -382,6 +436,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupPlayerBar() {
+        // Enforce rounded outline clipping on Android 10+
+        binding.playerBarCard.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                val radius = 18f * resources.displayMetrics.density
+                outline.setRoundRect(0, 0, view.width, view.height, radius)
+            }
+        }
+        binding.playerBarCard.clipToOutline = true
+
+        // Progress bar initial state
+        binding.playerProgressBar.pivotX = 0f
+        binding.playerProgressBar.scaleX = 0f
+
         // Toggle play/pause state with tactile micro-bounce
         binding.btnPlayerPlayPause.setOnClickListener {
             binding.btnPlayerPlayPause.animate()
@@ -425,11 +492,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun applyUiScale(newScale: Float) {
+        UiScaleManager.setScale(this, newScale)
+        Toast.makeText(this, "UI scale set to ${UiScaleManager.getScaleLabel(newScale)}", Toast.LENGTH_SHORT).show()
+
+        // Restart activity seamlessly right into the Settings tab
+        val intent = Intent(this, MainActivity::class.java).apply {
+            putExtra(EXTRA_START_TAB, MainPagerAdapter.PAGE_SETTINGS)
+            putExtra(EXTRA_SKIP_LOADING, true)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        }
+        finish()
+        startActivity(intent)
+        @Suppress("DEPRECATION")
+        overridePendingTransition(0, 0)
+    }
+
     private fun startLoadingSequence() {
-        // Reset views for loading sequence
+        // App content is already visible and populating behind the loading screen
         binding.loadingScreenContainer.alpha = 1f
         binding.loadingScreenContainer.visibility = View.VISIBLE
-        binding.blankContentContainer.visibility = View.GONE
+        binding.blankContentContainer.visibility = View.VISIBLE
 
         // Anchor scale from the left edge (0% -> 100% left-to-right fill)
         binding.loadingIndicator.pivotX = 0f
@@ -482,13 +565,13 @@ class MainActivity : AppCompatActivity() {
             duration = 1750
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
+                    // Smoothly fade out loading overlay revealing the fully-loaded app
                     binding.loadingScreenContainer.animate()
                         .alpha(0f)
-                        .setDuration(400)
-                        .setStartDelay(100)
+                        .setDuration(350)
+                        .setStartDelay(80)
                         .withEndAction {
                             binding.loadingScreenContainer.visibility = View.GONE
-                            binding.blankContentContainer.visibility = View.VISIBLE
                             glowAnimator?.cancel()
 
                             // Re-align indicator with measured tabs
@@ -496,26 +579,23 @@ class MainActivity : AppCompatActivity() {
                                 updateIndicator(binding.viewPager.currentItem, 0f)
                             }
 
-                            // Silently sync device audio in the background
-                            checkAndRequestAudioPermission()
-
-                            // Premium floating entrance animation for top navigation bar
+                            // Subtle floating entrance animation for top navigation bar
                             binding.topBarWrapper.alpha = 0f
-                            binding.topBarWrapper.translationY = -40f
+                            binding.topBarWrapper.translationY = -30f
                             binding.topBarWrapper.animate()
                                 .alpha(1f)
                                 .translationY(0f)
-                                .setDuration(450)
+                                .setDuration(400)
                                 .setInterpolator(DecelerateInterpolator())
                                 .start()
 
-                            // Premium floating entrance animation for bottom player bar
+                            // Subtle floating entrance animation for bottom player bar
                             binding.playerBarWrapper.alpha = 0f
-                            binding.playerBarWrapper.translationY = 40f
+                            binding.playerBarWrapper.translationY = 30f
                             binding.playerBarWrapper.animate()
                                 .alpha(1f)
                                 .translationY(0f)
-                                .setDuration(450)
+                                .setDuration(400)
                                 .setInterpolator(DecelerateInterpolator())
                                 .start()
                         }
