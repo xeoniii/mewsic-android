@@ -396,22 +396,6 @@ class MainActivity : AppCompatActivity() {
         librarySongAdapter.submitList(allSongs)
         pagerAdapter.updateData(stats, allSongs.size)
         loadPlaylists()
-
-        // Prime player bar with the most recently added song if idle
-        if (currentPlayingSong == null && recentSongs.isNotEmpty()) {
-            primePlayerBar(recentSongs.first())
-        }
-    }
-
-    private fun primePlayerBar(song: Song) {
-        currentPlayingSong = song
-        binding.tvPlayerTitle.text = song.title
-        binding.tvPlayerArtist.text = song.artist
-        ThumbnailLoader.loadThumbnail(binding.ivPlayerAlbumArt, song)
-        binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
-        isPlaying = false
-        binding.playerProgressBar.pivotX = 0f
-        binding.playerProgressBar.scaleX = 0f
     }
 
     private fun playSong(song: Song) {
@@ -527,6 +511,12 @@ class MainActivity : AppCompatActivity() {
         // Progress bar initial state
         binding.playerProgressBar.pivotX = 0f
         binding.playerProgressBar.scaleX = 0f
+
+        // Initial state when nothing is playing yet
+        binding.tvPlayerTitle.text = "Nothing playing"
+        binding.tvPlayerArtist.text = "Select a track to listen"
+        binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
+        binding.ivPlayerAlbumArt.setImageResource(R.drawable.ic_album_art_placeholder)
 
         // Toggle play/pause state with tactile micro-bounce
         binding.btnPlayerPlayPause.setOnClickListener {
@@ -982,7 +972,20 @@ class MainActivity : AppCompatActivity() {
 
         // Advance playback if currently playing
         if (currentPlayingSong?.id == song.id) {
-            playNextSong()
+            if (allSongs.isNotEmpty()) {
+                playNextSong()
+            } else {
+                currentPlayingSong = null
+                mediaPlayer?.stop()
+                mediaPlayer?.release()
+                mediaPlayer = null
+                isPlaying = false
+                binding.tvPlayerTitle.text = "Nothing playing"
+                binding.tvPlayerArtist.text = "Select a track to listen"
+                binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
+                binding.ivPlayerAlbumArt.setImageResource(R.drawable.ic_album_art_placeholder)
+                binding.playerProgressBar.scaleX = 0f
+            }
         }
 
         Toast.makeText(this, "Deleted \"${song.title}\"", Toast.LENGTH_SHORT).show()
