@@ -110,13 +110,9 @@ class MainPagerAdapter(
         fun bind(stats: LibraryStats?, hasSongs: Boolean) {
             if (stats != null) {
                 binding.tvTotalTracksValue.text = stats.totalTracks.toString()
-                binding.tvUniqueArtistsValue.text = stats.uniqueArtists.toString()
-                binding.tvTotalAlbumsValue.text = stats.totalAlbums.toString()
                 binding.tvPlaybackTimeValue.text = stats.formattedDuration
             } else {
                 binding.tvTotalTracksValue.text = "0"
-                binding.tvUniqueArtistsValue.text = "0"
-                binding.tvTotalAlbumsValue.text = "0"
                 binding.tvPlaybackTimeValue.text = "0m 00s"
             }
 
