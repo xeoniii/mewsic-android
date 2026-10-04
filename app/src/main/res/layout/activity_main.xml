@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/rootContainer"
     android:layout_width="match_parent"
@@ -7,18 +8,226 @@
     android:background="@color/background_dark"
     tools:context=".MainActivity">
 
-    <!-- Blank Page Canvas (Revealed after loading completes) -->
-    <FrameLayout
+    <!-- Main Content Container with Top Rounded Navigation Bar & Swipeable Pages -->
+    <LinearLayout
         android:id="@+id/blankContentContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:clickable="true"
-        android:focusable="true"
+        android:orientation="vertical"
         android:visibility="gone">
 
-        <!-- Clean Blank Canvas: Start designing your custom UI here -->
+        <!-- Top Rounded Navigation Bar Container -->
+        <FrameLayout
+            android:id="@+id/topBarWrapper"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="12dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="6dp">
 
-    </FrameLayout>
+            <HorizontalScrollView
+                android:id="@+id/navScrollView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_top_nav_container"
+                android:fillViewport="true"
+                android:overScrollMode="never"
+                android:paddingStart="5dp"
+                android:paddingTop="5dp"
+                android:paddingEnd="5dp"
+                android:paddingBottom="5dp"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/tabBarContainer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <!-- Home Tab -->
+                    <LinearLayout
+                        android:id="@+id/tabHome"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginStart="2dp"
+                        android:layout_marginEnd="2dp"
+                        android:background="@drawable/bg_nav_tab_selector"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="14dp">
+
+                        <ImageView
+                            android:id="@+id/ivTabHome"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:scaleType="fitCenter"
+                            android:src="@drawable/ic_tab_home"
+                            app:tint="@color/nav_tab_tint_selector" />
+
+                        <TextView
+                            android:id="@+id/tvTabHome"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="@string/tab_home"
+                            android:textColor="@color/nav_tab_tint_selector"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <!-- Library Tab -->
+                    <LinearLayout
+                        android:id="@+id/tabLibrary"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginStart="2dp"
+                        android:layout_marginEnd="2dp"
+                        android:background="@drawable/bg_nav_tab_selector"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="14dp">
+
+                        <ImageView
+                            android:id="@+id/ivTabLibrary"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:scaleType="fitCenter"
+                            android:src="@drawable/ic_tab_library"
+                            app:tint="@color/nav_tab_tint_selector" />
+
+                        <TextView
+                            android:id="@+id/tvTabLibrary"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="@string/tab_library"
+                            android:textColor="@color/nav_tab_tint_selector"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <!-- Playlist Tab -->
+                    <LinearLayout
+                        android:id="@+id/tabPlaylist"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginStart="2dp"
+                        android:layout_marginEnd="2dp"
+                        android:background="@drawable/bg_nav_tab_selector"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="14dp">
+
+                        <ImageView
+                            android:id="@+id/ivTabPlaylist"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:scaleType="fitCenter"
+                            android:src="@drawable/ic_tab_playlist"
+                            app:tint="@color/nav_tab_tint_selector" />
+
+                        <TextView
+                            android:id="@+id/tvTabPlaylist"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="@string/tab_playlist"
+                            android:textColor="@color/nav_tab_tint_selector"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <!-- Harbour Tab -->
+                    <LinearLayout
+                        android:id="@+id/tabHarbour"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginStart="2dp"
+                        android:layout_marginEnd="2dp"
+                        android:background="@drawable/bg_nav_tab_selector"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="14dp">
+
+                        <ImageView
+                            android:id="@+id/ivTabHarbour"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:scaleType="fitCenter"
+                            android:src="@drawable/ic_tab_harbour"
+                            app:tint="@color/nav_tab_tint_selector" />
+
+                        <TextView
+                            android:id="@+id/tvTabHarbour"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="@string/tab_harbour"
+                            android:textColor="@color/nav_tab_tint_selector"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <!-- Settings Tab -->
+                    <LinearLayout
+                        android:id="@+id/tabSettings"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginStart="2dp"
+                        android:layout_marginEnd="2dp"
+                        android:background="@drawable/bg_nav_tab_selector"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="14dp">
+
+                        <ImageView
+                            android:id="@+id/ivTabSettings"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:scaleType="fitCenter"
+                            android:src="@drawable/ic_tab_settings"
+                            app:tint="@color/nav_tab_tint_selector" />
+
+                        <TextView
+                            android:id="@+id/tvTabSettings"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="@string/tab_settings"
+                            android:textColor="@color/nav_tab_tint_selector"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                </LinearLayout>
+            </HorizontalScrollView>
+        </FrameLayout>
+
+        <!-- Swipeable Blank Canvas ViewPager2 -->
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/viewPager"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+    </LinearLayout>
 
     <!-- Loading Screen Container (Fades out into the blank page) -->
     <FrameLayout

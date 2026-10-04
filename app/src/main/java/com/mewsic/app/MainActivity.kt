@@ -7,13 +7,17 @@ import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
 import android.animation.ValueAnimator
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.widget.ViewPager2
 import com.mewsic.app.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
@@ -21,6 +25,22 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private var loadAnimator: ObjectAnimator? = null
     private var glowAnimator: ObjectAnimator? = null
+
+    private data class NavTab(
+        val container: View,
+        val icon: View,
+        val label: View
+    )
+
+    private val navTabs by lazy {
+        listOf(
+            NavTab(binding.tabHome, binding.ivTabHome, binding.tvTabHome),
+            NavTab(binding.tabLibrary, binding.ivTabLibrary, binding.tvTabLibrary),
+            NavTab(binding.tabPlaylist, binding.ivTabPlaylist, binding.tvTabPlaylist),
+            NavTab(binding.tabHarbour, binding.ivTabHarbour, binding.tvTabHarbour),
+            NavTab(binding.tabSettings, binding.ivTabSettings, binding.tvTabSettings)
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,12 +58,48 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        // Tap on blank canvas allows replaying the loading animation anytime
-        binding.blankContentContainer.setOnClickListener {
-            startLoadingSequence()
+        setupNavigation()
+        startLoadingSequence()
+    }
+
+    private fun setupNavigation() {
+        // Setup ViewPager2 with 5 swipeable blank canvas pages
+        binding.viewPager.adapter = BlankPagesAdapter()
+        binding.viewPager.offscreenPageLimit = 4
+
+        // Synchronize page swipes with top tabs
+        binding.viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                super.onPageSelected(position)
+                highlightTab(position)
+            }
+        })
+
+        // Connect tab clicks
+        navTabs.forEachIndexed { index, tab ->
+            tab.container.setOnClickListener {
+                binding.viewPager.setCurrentItem(index, true)
+            }
         }
 
-        startLoadingSequence()
+        // Initialize Home tab as selected
+        highlightTab(0)
+    }
+
+    private fun highlightTab(position: Int) {
+        navTabs.forEachIndexed { index, tab ->
+            val isSelected = (index == position)
+            tab.container.isSelected = isSelected
+            tab.icon.isSelected = isSelected
+            tab.label.isSelected = isSelected
+        }
+
+        // Smoothly scroll top bar to keep selected tab centered
+        val selectedContainer = navTabs.getOrNull(position)?.container ?: return
+        binding.navScrollView.post {
+            val scrollX = selectedContainer.left - (binding.navScrollView.width / 2) + (selectedContainer.width / 2)
+            binding.navScrollView.smoothScrollTo(scrollX.coerceAtLeast(0), 0)
+        }
     }
 
     private fun startLoadingSequence() {
@@ -129,5 +185,20 @@ class MainActivity : AppCompatActivity() {
         loadAnimator?.cancel()
         glowAnimator?.cancel()
         super.onDestroy()
+    }
+
+    private class BlankPagesAdapter : RecyclerView.Adapter<BlankPagesAdapter.PageViewHolder>() {
+        override fun getItemCount(): Int = 5
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PageViewHolder {
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_blank_page, parent, false)
+            return PageViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
+            // Blank canvas ready for designing
+        }
+
+        class PageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView)
     }
 }

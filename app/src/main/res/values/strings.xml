@@ -4,4 +4,11 @@
     <string name="tagline">Pure Sound. Ultra-Smooth.</string>
     <string name="app_description">High-performance music player designed for speed and low memory usage.</string>
     <string name="content_desc_logo">Mewsic App Logo</string>
+
+    <!-- Navigation Tabs -->
+    <string name="tab_home">Home</string>
+    <string name="tab_library">Library</string>
+    <string name="tab_playlist">Playlist</string>
+    <string name="tab_harbour">Harbour</string>
+    <string name="tab_settings">Settings</string>
 </resources>
