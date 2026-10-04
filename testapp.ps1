@@ -21,7 +21,7 @@ if (-not (Get-Command adb -ErrorAction SilentlyContinue)) {
 }
 
 # 2. Check for connected device
-Write-Host "==> Checking for connected Android device..." -ForegroundColor Cyan
+Write-Host "==> Checking for connected devices..." -ForegroundColor Cyan
 $devices = & $adb devices | Where-Object { $_ -match '\tdevice$' }
 
 if (-not $devices) {
@@ -36,7 +36,7 @@ $deviceCount = ($devices | Measure-Object).Count
 Write-Host "[+] Found $deviceCount connected device(s)." -ForegroundColor Green
 
 # 3. Build APK
-Write-Host "==> Compiling Mewsic (Debug)..." -ForegroundColor Cyan
+Write-Host "==> Compiling Mewsic..." -ForegroundColor Cyan
 & ".\gradlew.bat" assembleDebug
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[X] Build failed! Check the Gradle errors above." -ForegroundColor Red
@@ -50,7 +50,7 @@ if (-not (Test-Path $apkPath)) {
     exit 1
 }
 
-Write-Host "==> Installing APK onto device..." -ForegroundColor Cyan
+Write-Host "==> Installing Mewsic..." -ForegroundColor Cyan
 & $adb install -r $apkPath
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[X] Installation failed!" -ForegroundColor Red
@@ -58,8 +58,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # 5. Launch App Instantly
-Write-Host "==> Launching Mewsic instantly..." -ForegroundColor Green
+Write-Host "==> Launching Mewsic..." -ForegroundColor Green
 & $adb shell am start -n com.mewsic.app/.MainActivity
 
 Write-Host ""
-Write-Host "[SUCCESS] Mewsic is running on your phone!" -ForegroundColor Green
+Write-Host "[SUCCESS] Mewsic is now running!" -ForegroundColor Green
