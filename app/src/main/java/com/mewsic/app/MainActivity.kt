@@ -165,6 +165,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Prevent duplicate instances if launched from home screen / adb when already running
+        if (!isTaskRoot
+            && intent.hasCategory(Intent.CATEGORY_LAUNCHER)
+            && intent.action != null
+            && intent.action == Intent.ACTION_MAIN
+        ) {
+            finish()
+            return
+        }
+
         // Enforce dark mode explicitly across all vendor skins (MIUI, ColorOS, OneUI)
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
         super.onCreate(savedInstanceState)
@@ -190,16 +200,16 @@ class MainActivity : AppCompatActivity() {
         setupNavigation()
         setupPlayerBar()
 
-        // Handle system back navigation (e.g. exit playlist detail view back to playlist list)
+        // Handle system back navigation (nested playlist detail -> Home tab -> background task)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (binding.viewPager.currentItem == MainPagerAdapter.PAGE_PLAYLIST && pagerAdapter.isPlaylistDetailOpen()) {
                     pagerAdapter.closePlaylistDetail()
                     currentOpenPlaylist = null
+                } else if (binding.viewPager.currentItem != MainPagerAdapter.PAGE_HOME) {
+                    binding.viewPager.setCurrentItem(MainPagerAdapter.PAGE_HOME, true)
                 } else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
-                    isEnabled = true
+                    moveTaskToBack(true)
                 }
             }
         })
@@ -975,6 +985,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         Toast.makeText(this, "Deleted \"${song.title}\"", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
     }
 
     override fun onDestroy() {
