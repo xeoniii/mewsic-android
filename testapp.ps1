@@ -3,6 +3,12 @@
 
 $ErrorActionPreference = "Stop"
 
+# Ensure Java 21 is used (Android Gradle Plugin requires Java 17-21)
+if (Test-Path "C:\Work\jdk-21") {
+    $env:JAVA_HOME = "C:\Work\jdk-21"
+    $env:Path = "C:\Work\jdk-21\bin;" + $env:Path
+}
+
 # 1. Resolve ADB path
 $adb = "adb"
 if (-not (Get-Command adb -ErrorAction SilentlyContinue)) {

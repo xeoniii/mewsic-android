@@ -1,6 +1,12 @@
 @echo off
 setlocal
 
+:: Set JDK 21 for Android build compatibility
+if exist "C:\Work\jdk-21" (
+    set "JAVA_HOME=C:\Work\jdk-21"
+    set "PATH=C:\Work\jdk-21\bin;%PATH%"
+)
+
 :: Resolve ADB
 where adb >nul 2>nul
 if %errorlevel% equ 0 (
