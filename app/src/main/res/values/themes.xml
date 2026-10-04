@@ -10,4 +10,12 @@
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
         <item name="android:windowActivityTransitions">true</item>
     </style>
+
+    <!-- WhatsApp-style bold tab text -->
+    <style name="TabTextAppearance" parent="TextAppearance.Design.Tab">
+        <item name="android:textSize">13sp</item>
+        <item name="android:fontFamily">sans-serif-bold</item>
+        <item name="textAllCaps">true</item>
+        <item name="android:letterSpacing">0.05</item>
+    </style>
 </resources>

@@ -30,7 +30,7 @@ class HomeFragment : Fragment() {
         val mainActivity = activity as? MainActivity
 
         binding.btnOpenLibrary.setOnClickListener {
-            mainActivity?.navigateToTab(R.id.menu_library)
+            mainActivity?.navigateToTab(1)
         }
 
         binding.cardMix1.setOnClickListener {

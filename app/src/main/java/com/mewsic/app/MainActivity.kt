@@ -5,21 +5,16 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.fragment.app.Fragment
+import com.google.android.material.tabs.TabLayoutMediator
+import com.mewsic.app.adapter.MainPagerAdapter
 import com.mewsic.app.data.DummyData
 import com.mewsic.app.databinding.ActivityMainBinding
 import com.mewsic.app.model.Song
-import com.mewsic.app.ui.HomeFragment
-import com.mewsic.app.ui.LibraryFragment
-import com.mewsic.app.ui.PlayerFragment
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-
-    private val homeFragment = HomeFragment()
-    private val libraryFragment = LibraryFragment()
-    private val playerFragment = PlayerFragment()
+    private lateinit var pagerAdapter: MainPagerAdapter
 
     var currentSong: Song = DummyData.getDummySongs().first()
         private set
@@ -29,54 +24,55 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Enable edge-to-edge rendering
+        // Enable edge-to-edge display
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Apply system bar insets without causing layout shifts
+        // Apply system bar insets cleanly
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootContainer) { _, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            binding.rootContainer.setPadding(0, systemBars.top, 0, 0)
-            binding.bottomNav.setPadding(0, 0, 0, systemBars.bottom)
+            binding.topBar.setPadding(
+                binding.topBar.paddingLeft,
+                systemBars.top,
+                binding.topBar.paddingRight,
+                binding.topBar.paddingBottom
+            )
+            binding.miniPlayerContainer.setPadding(
+                binding.miniPlayerContainer.paddingLeft,
+                binding.miniPlayerContainer.paddingTop,
+                binding.miniPlayerContainer.paddingRight,
+                systemBars.bottom
+            )
             insets
         }
 
-        setupBottomNavigation()
+        setupViewPagerAndTabs()
         setupMiniPlayer()
-
-        // Set default fragment
-        if (savedInstanceState == null) {
-            setFragment(homeFragment)
-        }
     }
 
-    private fun setupBottomNavigation() {
-        binding.bottomNav.setOnItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.menu_home -> {
-                    setFragment(homeFragment)
-                    true
-                }
-                R.id.menu_library -> {
-                    setFragment(libraryFragment)
-                    true
-                }
-                R.id.menu_player -> {
-                    setFragment(playerFragment)
-                    true
-                }
-                else -> false
-            }
+    private fun setupViewPagerAndTabs() {
+        pagerAdapter = MainPagerAdapter(this)
+        binding.viewPager.apply {
+            adapter = pagerAdapter
+            // Keep all 3 pages in memory for instantaneous zero-lag swiping
+            offscreenPageLimit = 2
         }
+
+        val tabTitles = arrayOf("DISCOVER", "LIBRARY", "PLAYER")
+
+        // Synchronize TabLayout with ViewPager2 (WhatsApp-style horizontal fling & indicator tracking)
+        TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
+            tab.text = tabTitles[position]
+        }.attach()
     }
 
     private fun setupMiniPlayer() {
         updateMiniPlayerUI()
 
         binding.miniPlayerBar.setOnClickListener {
-            navigateToTab(R.id.menu_player)
+            navigateToTab(2) // Jump to Now Playing tab
         }
 
         binding.btnMiniPlayPause.setOnClickListener {
@@ -84,21 +80,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun navigateToTab(menuItemId: Int) {
-        binding.bottomNav.selectedItemId = menuItemId
+    fun navigateToTab(position: Int) {
+        binding.viewPager.setCurrentItem(position, true)
     }
 
     fun playSong(song: Song) {
         currentSong = song
         isPlaying = true
         updateMiniPlayerUI()
-        playerFragment.updateUI(currentSong, isPlaying)
+        pagerAdapter.playerFragment.updateUI(currentSong, isPlaying)
     }
 
     fun togglePlayPause() {
         isPlaying = !isPlaying
         updateMiniPlayerUI()
-        playerFragment.updateUI(currentSong, isPlaying)
+        pagerAdapter.playerFragment.updateUI(currentSong, isPlaying)
     }
 
     fun playNext() {
@@ -120,11 +116,5 @@ class MainActivity : AppCompatActivity() {
         binding.tvMiniArtist.text = "${currentSong.artist} • ${currentSong.album}"
         val icon = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
         binding.btnMiniPlayPause.setImageResource(icon)
-    }
-
-    private fun setFragment(fragment: Fragment) {
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.fragmentContainer, fragment)
-            .commit()
     }
 }
