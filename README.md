@@ -1,3 +1,3 @@
 # mewsic-android
 
-Android music player application.
+**Work In Progress**
