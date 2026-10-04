@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 3 audio waveform equalizer bars (ılı) -->
+    <path
+        android:fillColor="#1ADA6B"
+        android:pathData="M4,13h3v7H4z M10.5,7h3v13h-3z M17,10h3v10h-3z" />
+</vector>

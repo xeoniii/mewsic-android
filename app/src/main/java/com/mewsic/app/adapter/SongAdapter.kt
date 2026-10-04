@@ -2,16 +2,19 @@ package com.mewsic.app.adapter
 
 import android.graphics.Color
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.mewsic.app.R
 import com.mewsic.app.databinding.ItemSongRowBinding
 import com.mewsic.app.model.Song
 import com.mewsic.app.scanner.ThumbnailLoader
 
 class SongAdapter(
-    private val onSongClicked: (song: Song, position: Int) -> Unit
+    private val onSongClicked: (song: Song, position: Int) -> Unit,
+    private val onSongLongClicked: ((song: Song, position: Int) -> Unit)? = null
 ) : ListAdapter<Song, SongAdapter.SongViewHolder>(SongDiffCallback()) {
 
     var activeSongId: Long? = null
@@ -43,27 +46,43 @@ class SongAdapter(
         fun bind(song: Song, position: Int) {
             val isActive = song.id == activeSongId
 
-            binding.tvTrackIndex.text = (position + 1).toString()
-            binding.tvSongTitle.text = song.title
             binding.tvSongArtist.text = song.artist
             binding.tvSongDuration.text = song.durationFormatted
 
-            if (song.album.isNotBlank() && song.album != "Unknown Album") {
-                binding.tvSongAlbum.text = song.album
-                binding.tvSongAlbum.visibility = android.view.View.VISIBLE
-            } else {
-                binding.tvSongAlbum.visibility = android.view.View.GONE
-            }
-
-            // Active track styling (green title & index matching Mewsic PC app)
+            // Desktop Mewsic card style
             if (isActive) {
+                binding.ivTrackStatus.visibility = View.VISIBLE
+                binding.ivTrackStatus.setImageResource(R.drawable.ic_equalizer)
+                binding.tvTrackIndex.visibility = View.GONE
+
+                binding.tvSongTitle.text = "• ${song.title}"
                 binding.tvSongTitle.setTextColor(Color.parseColor("#1ADA6B"))
-                binding.tvTrackIndex.setTextColor(Color.parseColor("#1ADA6B"))
-                binding.songRowContainer.setBackgroundColor(Color.parseColor("#151ADA6B"))
+
+                if (song.album.isNotBlank() && song.album != "Unknown Album") {
+                    binding.tvSongAlbum.text = "• ${song.album}"
+                    binding.tvSongAlbum.visibility = View.VISIBLE
+                } else {
+                    binding.tvSongAlbum.visibility = View.GONE
+                }
+
+                binding.songRowContainer.setBackgroundResource(R.drawable.bg_song_card_active)
             } else {
-                binding.tvSongTitle.setTextColor(Color.parseColor("#FFFFFF"))
+                binding.ivTrackStatus.visibility = View.GONE
+                binding.tvTrackIndex.visibility = View.VISIBLE
+                binding.tvTrackIndex.text = (position + 1).toString()
                 binding.tvTrackIndex.setTextColor(Color.parseColor("#898D8E"))
-                binding.songRowContainer.setBackgroundColor(Color.TRANSPARENT)
+
+                binding.tvSongTitle.text = song.title
+                binding.tvSongTitle.setTextColor(Color.parseColor("#FFFFFF"))
+
+                if (song.album.isNotBlank() && song.album != "Unknown Album") {
+                    binding.tvSongAlbum.text = song.album
+                    binding.tvSongAlbum.visibility = View.VISIBLE
+                } else {
+                    binding.tvSongAlbum.visibility = View.GONE
+                }
+
+                binding.songRowContainer.setBackgroundResource(R.drawable.bg_song_card_idle)
             }
 
             // Load album art thumbnail asynchronously with LRU cache & PC app fallback
@@ -71,6 +90,11 @@ class SongAdapter(
 
             binding.root.setOnClickListener {
                 onSongClicked(song, bindingAdapterPosition)
+            }
+
+            binding.root.setOnLongClickListener {
+                onSongLongClicked?.invoke(song, bindingAdapterPosition)
+                true
             }
         }
     }

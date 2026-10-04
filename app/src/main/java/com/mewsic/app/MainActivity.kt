@@ -27,18 +27,24 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import android.view.HapticFeedbackConstants
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.mewsic.app.adapter.MainPagerAdapter
 import com.mewsic.app.adapter.SongAdapter
 import com.mewsic.app.databinding.ActivityMainBinding
+import com.mewsic.app.databinding.DialogBottomSheetSongOptionsBinding
+import com.mewsic.app.databinding.DialogEditSongBinding
 import com.mewsic.app.model.Song
 import com.mewsic.app.scanner.LibraryCache
 import com.mewsic.app.scanner.MediaScanner
+import com.mewsic.app.scanner.PlaylistManager
 import com.mewsic.app.scanner.ThumbnailLoader
 import com.mewsic.app.util.UiScaleManager
 import kotlinx.coroutines.Job
@@ -68,11 +74,17 @@ class MainActivity : AppCompatActivity() {
     private var recentSongs: List<Song> = emptyList()
 
     private val homeSongAdapter by lazy {
-        SongAdapter { song, _ -> playSong(song) }
+        SongAdapter(
+            onSongClicked = { song, _ -> playSong(song) },
+            onSongLongClicked = { song, _ -> showSongOptions(song) }
+        )
     }
 
     private val librarySongAdapter by lazy {
-        SongAdapter { song, _ -> playSong(song) }
+        SongAdapter(
+            onSongClicked = { song, _ -> playSong(song) },
+            onSongLongClicked = { song, _ -> showSongOptions(song) }
+        )
     }
 
     private val pagerAdapter by lazy {
@@ -604,6 +616,184 @@ class MainActivity : AppCompatActivity() {
             })
             start()
         }
+    }
+
+    // =========================================================================
+    // Song Context Actions (Long Press Options: Delete, Edit, Add to Playlist)
+    // =========================================================================
+
+    private fun showSongOptions(song: Song) {
+        window.decorView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+
+        val bottomSheetDialog = BottomSheetDialog(this, R.style.BottomSheetDialogTheme)
+        val sheetBinding = DialogBottomSheetSongOptionsBinding.inflate(layoutInflater)
+        bottomSheetDialog.setContentView(sheetBinding.root)
+
+        // Bind song header preview
+        sheetBinding.tvOptionSongTitle.text = song.title
+        val subtitle = if (song.album.isNotBlank() && song.album != "Unknown Album") {
+            "${song.artist} • ${song.album}"
+        } else {
+            song.artist
+        }
+        sheetBinding.tvOptionSongSubtitle.text = subtitle
+        sheetBinding.tvOptionSongDuration.text = song.durationFormatted
+        ThumbnailLoader.loadThumbnail(sheetBinding.ivOptionAlbumArt, song)
+
+        // 1. Add to playlist
+        sheetBinding.btnOptionAddToPlaylist.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            showAddToPlaylistDialog(song)
+        }
+
+        // 2. Edit song details
+        sheetBinding.btnOptionEdit.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            showEditSongDialog(song)
+        }
+
+        // 3. Delete track
+        sheetBinding.btnOptionDelete.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            showDeleteSongDialog(song)
+        }
+
+        bottomSheetDialog.show()
+    }
+
+    private fun showAddToPlaylistDialog(song: Song) {
+        val playlists = PlaylistManager.getPlaylists(this).toMutableList()
+        val options = playlists + "＋ Create New Playlist"
+
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Add to Playlist")
+        builder.setItems(options.toTypedArray()) { _, which ->
+            if (which == playlists.size) {
+                showCreatePlaylistDialog(song)
+            } else {
+                val selectedPlaylist = playlists[which]
+                val added = PlaylistManager.addSongToPlaylist(this, selectedPlaylist, song.id)
+                if (added) {
+                    Toast.makeText(this, "Added to $selectedPlaylist", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Already in $selectedPlaylist", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        builder.setNegativeButton("Cancel", null)
+        builder.show()
+    }
+
+    private fun showCreatePlaylistDialog(song: Song) {
+        val input = android.widget.EditText(this).apply {
+            hint = "Playlist Name"
+            setPadding(48, 32, 48, 32)
+            setTextColor(android.graphics.Color.WHITE)
+            setHintTextColor(android.graphics.Color.GRAY)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("New Playlist")
+            .setView(input)
+            .setPositiveButton("Create & Add") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isNotBlank()) {
+                    PlaylistManager.createPlaylist(this, name)
+                    PlaylistManager.addSongToPlaylist(this, name, song.id)
+                    Toast.makeText(this, "Created & Added to $name", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showEditSongDialog(song: Song) {
+        val editBinding = DialogEditSongBinding.inflate(layoutInflater)
+        val dialog = AlertDialog.Builder(this)
+            .setView(editBinding.root)
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        editBinding.etEditTitle.setText(song.title)
+        editBinding.etEditArtist.setText(if (song.artist != "Unknown Artist") song.artist else "")
+        editBinding.etEditAlbum.setText(if (song.album != "Unknown Album") song.album else "")
+
+        editBinding.btnEditCancel.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        editBinding.btnEditSave.setOnClickListener {
+            val newTitle = editBinding.etEditTitle.text.toString().trim()
+            val newArtist = editBinding.etEditArtist.text.toString().trim().ifEmpty { "Unknown Artist" }
+            val newAlbum = editBinding.etEditAlbum.text.toString().trim().ifEmpty { "Unknown Album" }
+
+            if (newTitle.isNotBlank()) {
+                val updatedSong = song.copy(
+                    title = newTitle,
+                    artist = newArtist,
+                    album = newAlbum
+                )
+
+                // Update datasets in-memory and disk cache
+                allSongs = allSongs.map { if (it.id == song.id) updatedSong else it }
+                applySongsToUI(allSongs)
+                lifecycleScope.launch {
+                    LibraryCache.saveCachedSongs(this@MainActivity, allSongs)
+                }
+
+                // Update current playing view if applicable
+                if (currentPlayingSong?.id == song.id) {
+                    currentPlayingSong = updatedSong
+                    binding.tvPlayerTitle.text = newTitle
+                    binding.tvPlayerArtist.text = newArtist
+                }
+
+                Toast.makeText(this, "Updated \"$newTitle\"", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            } else {
+                Toast.makeText(this, "Title cannot be blank", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun showDeleteSongDialog(song: Song) {
+        AlertDialog.Builder(this)
+            .setTitle("Delete Track")
+            .setMessage("Are you sure you want to delete \"${song.title}\" from your device?")
+            .setPositiveButton("Delete") { _, _ ->
+                performDeleteSong(song)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun performDeleteSong(song: Song) {
+        try {
+            val file = java.io.File(song.filePath)
+            if (file.exists()) {
+                file.delete()
+            }
+            contentResolver.delete(song.contentUri, null, null)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Remove from list and update UI
+        allSongs = allSongs.filter { it.id != song.id }
+        applySongsToUI(allSongs)
+        lifecycleScope.launch {
+            LibraryCache.saveCachedSongs(this@MainActivity, allSongs)
+        }
+
+        // Advance playback if currently playing
+        if (currentPlayingSong?.id == song.id) {
+            playNextSong()
+        }
+
+        Toast.makeText(this, "Deleted \"${song.title}\"", Toast.LENGTH_SHORT).show()
     }
 
     override fun onDestroy() {

@@ -1,36 +1,58 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/songRowContainer"
     android:layout_width="match_parent"
-    android:layout_height="60dp"
+    android:layout_height="58dp"
+    android:layout_marginStart="8dp"
+    android:layout_marginTop="2dp"
+    android:layout_marginEnd="8dp"
+    android:layout_marginBottom="2dp"
+    android:background="@drawable/bg_song_card_idle"
+    android:clickable="true"
+    android:focusable="true"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:paddingStart="8dp"
-    android:paddingEnd="12dp"
-    android:background="?attr/selectableItemBackground">
+    android:paddingStart="10dp"
+    android:paddingEnd="12dp">
 
-    <!-- 1. Track Index / Playing Status -->
-    <TextView
-        android:id="@+id/tvTrackIndex"
-        android:layout_width="28dp"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:textColor="#898D8E"
-        android:textSize="13sp"
-        android:fontFamily="sans-serif-medium"
-        tools:text="1" />
+    <!-- 1. Track Index OR Equalizer Waveform / Play Icon -->
+    <FrameLayout
+        android:layout_width="26dp"
+        android:layout_height="match_parent">
 
-    <!-- 2. Album Art Thumbnail with Rounded Corners -->
-    <androidx.cardview.widget.CardView
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        android:layout_width="44dp"
-        android:layout_height="44dp"
-        android:layout_marginStart="6dp"
+        <TextView
+            android:id="@+id/tvTrackIndex"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="#898D8E"
+            android:textSize="13sp"
+            tools:text="1" />
+
+        <ImageView
+            android:id="@+id/ivTrackStatus"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="center"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_equalizer"
+            android:visibility="gone"
+            app:tint="@color/tab_active_tint" />
+    </FrameLayout>
+
+    <!-- 2. Album Art Thumbnail with 8dp Rounded Corners -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="8dp"
         android:layout_marginEnd="12dp"
+        app:cardBackgroundColor="@android:color/transparent"
         app:cardCornerRadius="8dp"
         app:cardElevation="0dp"
-        app:cardBackgroundColor="@android:color/transparent">
+        app:strokeWidth="0dp">
 
         <ImageView
             android:id="@+id/ivAlbumArt"
@@ -38,13 +60,13 @@
             android:layout_height="match_parent"
             android:scaleType="centerCrop"
             android:src="@drawable/ic_album_art_placeholder" />
-    </androidx.cardview.widget.CardView>
+    </com.google.android.material.card.MaterialCardView>
 
     <!-- 3. Title & Artist -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_weight="1.5"
+        android:layout_weight="1.6"
         android:orientation="vertical">
 
         <TextView
@@ -52,11 +74,11 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
             android:maxLines="1"
             android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:fontFamily="sans-serif-medium"
-            tools:text="S0N6F0RMYD34TH (Slowed)" />
+            android:textSize="13.5sp"
+            tools:text="• Chérie • 23 • (Sloweddd)" />
 
         <TextView
             android:id="@+id/tvSongArtist"
@@ -65,25 +87,25 @@
             android:layout_marginTop="2dp"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="#94A3B8"
-            android:textSize="12sp"
-            tools:text="STAKILLAZ" />
+            android:textColor="#8E9BAE"
+            android:textSize="11.5sp"
+            tools:text="VDYCD" />
     </LinearLayout>
 
-    <!-- 4. Album Name (Optional / responsive) -->
+    <!-- 4. Album Name (Responsive Mewsic column) -->
     <TextView
         android:id="@+id/tvSongAlbum"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_weight="0.45"
         android:layout_marginStart="8dp"
         android:layout_marginEnd="8dp"
+        android:layout_weight="0.6"
         android:ellipsize="end"
         android:maxLines="1"
-        android:textColor="#64748B"
-        android:textSize="12sp"
+        android:textColor="#65768A"
+        android:textSize="11.5sp"
         android:visibility="gone"
-        tools:text="YouTube"
+        tools:text="• Chérie • 23 • (Remastered 2024) - EP"
         tools:visibility="visible" />
 
     <!-- 5. Duration -->
@@ -93,8 +115,8 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
         android:fontFamily="monospace"
-        android:textColor="#94A3B8"
-        android:textSize="12sp"
-        tools:text="3:10" />
+        android:textColor="#8E9BAE"
+        android:textSize="11.5sp"
+        tools:text="3:42" />
 
 </LinearLayout>
