@@ -66,3 +66,6 @@ Screenshot_*
 *.jpeg
 *.png
 
+# Local test runner scripts
+testapp*
+
