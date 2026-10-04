@@ -1,14 +1,18 @@
 package com.mewsic.app.adapter
 
+import android.graphics.PorterDuff
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.mewsic.app.R
 import com.mewsic.app.databinding.ItemPlaylistCardBinding
 import com.mewsic.app.scanner.PlaylistInfo
+import com.mewsic.app.scanner.ThumbnailLoader
 
 class PlaylistAdapter(
     private val onPlaylistClicked: (playlist: PlaylistInfo) -> Unit,
@@ -36,13 +40,23 @@ class PlaylistAdapter(
             binding.tvPlaylistName.text = playlist.name
             val countStr = "${playlist.trackCount} ${if (playlist.trackCount == 1) "track" else "tracks"}"
             binding.tvPlaylistTrackCount.text = countStr
+            binding.btnPlaylistMore.visibility = View.VISIBLE
 
-            if (playlist.isDefault) {
-                binding.ivPlaylistIcon.setImageResource(R.drawable.ic_heart)
-                binding.btnPlaylistMore.visibility = View.GONE
+            // Load first song's thumbnail as playlist cover, or fallback icon if playlist is empty
+            if (playlist.firstSong != null) {
+                binding.ivPlaylistCover.scaleType = ImageView.ScaleType.CENTER_CROP
+                binding.ivPlaylistCover.setPadding(0, 0, 0, 0)
+                binding.ivPlaylistCover.clearColorFilter()
+                ThumbnailLoader.loadThumbnail(binding.ivPlaylistCover, playlist.firstSong)
             } else {
-                binding.ivPlaylistIcon.setImageResource(R.drawable.ic_tab_playlist)
-                binding.btnPlaylistMore.visibility = View.VISIBLE
+                binding.ivPlaylistCover.scaleType = ImageView.ScaleType.CENTER_INSIDE
+                val pad = (12 * binding.root.resources.displayMetrics.density).toInt()
+                binding.ivPlaylistCover.setPadding(pad, pad, pad, pad)
+                binding.ivPlaylistCover.setImageResource(R.drawable.ic_tab_playlist)
+                binding.ivPlaylistCover.setColorFilter(
+                    ContextCompat.getColor(binding.root.context, R.color.tab_active_tint),
+                    PorterDuff.Mode.SRC_IN
+                )
             }
 
             binding.root.setOnClickListener {

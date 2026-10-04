@@ -15,21 +15,24 @@
     android:paddingStart="12dp"
     android:paddingEnd="12dp">
 
-    <!-- Playlist Icon Badge -->
-    <FrameLayout
-        android:id="@+id/badgePlaylistIcon"
-        android:layout_width="44dp"
-        android:layout_height="44dp"
-        android:background="@drawable/bg_stat_icon_badge">
+    <!-- Playlist Cover Art (First song's thumbnail or placeholder) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardPlaylistCover"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        app:cardBackgroundColor="#16222F"
+        app:cardCornerRadius="10dp"
+        app:cardElevation="0dp"
+        app:strokeColor="#253545"
+        app:strokeWidth="1dp">
 
         <ImageView
-            android:id="@+id/ivPlaylistIcon"
-            android:layout_width="22dp"
-            android:layout_height="22dp"
-            android:layout_gravity="center"
-            android:src="@drawable/ic_heart"
-            app:tint="@color/tab_active_tint" />
-    </FrameLayout>
+            android:id="@+id/ivPlaylistCover"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:src="@drawable/ic_tab_playlist" />
+    </com.google.android.material.card.MaterialCardView>
 
     <!-- Playlist Metadata -->
     <LinearLayout

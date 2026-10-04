@@ -690,7 +690,7 @@ class MainActivity : AppCompatActivity() {
     // =========================================================================
 
     private fun loadPlaylists() {
-        val playlists = PlaylistManager.getPlaylistInfos(this)
+        val playlists = PlaylistManager.getPlaylistInfos(this, allSongs)
         playlistAdapter.submitList(playlists)
         currentOpenPlaylist?.let { name ->
             refreshCurrentPlaylistSongs(name)
@@ -704,9 +704,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshCurrentPlaylistSongs(playlistName: String) {
         val songIds = PlaylistManager.getPlaylistSongIds(this, playlistName)
-        currentPlaylistSongs = allSongs.filter { it.id in songIds }
+        val songMap = allSongs.associateBy { it.id }
+        currentPlaylistSongs = songIds.mapNotNull { songMap[it] }
         playlistSongsAdapter.submitList(currentPlaylistSongs)
-        pagerAdapter.openPlaylistDetail(playlistName, currentPlaylistSongs.size)
+        pagerAdapter.openPlaylistDetail(playlistName, currentPlaylistSongs.size, currentPlaylistSongs.firstOrNull())
     }
 
     private fun playAllPlaylist(playlistName: String) {

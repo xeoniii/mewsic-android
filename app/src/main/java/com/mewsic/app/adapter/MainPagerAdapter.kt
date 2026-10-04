@@ -1,17 +1,24 @@
 package com.mewsic.app.adapter
 
+import android.graphics.PorterDuff
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.slider.Slider
+import com.mewsic.app.R
 import com.mewsic.app.databinding.ItemBlankPageBinding
+import com.mewsic.app.databinding.PageHarbourBinding
 import com.mewsic.app.databinding.PageHomeBinding
 import com.mewsic.app.databinding.PageLibraryBinding
 import com.mewsic.app.databinding.PagePlaylistBinding
 import com.mewsic.app.databinding.PageSettingsBinding
+import com.mewsic.app.model.Song
 import com.mewsic.app.scanner.LibraryStats
+import com.mewsic.app.scanner.ThumbnailLoader
 import com.mewsic.app.util.UiScaleManager
 
 class MainPagerAdapter(
@@ -52,8 +59,8 @@ class MainPagerAdapter(
         settingsViewHolder?.bind(totalTrackCount)
     }
 
-    fun openPlaylistDetail(playlistName: String, songsCount: Int) {
-        playlistViewHolder?.showDetail(playlistName, songsCount)
+    fun openPlaylistDetail(playlistName: String, songsCount: Int, firstSong: Song? = null) {
+        playlistViewHolder?.showDetail(playlistName, songsCount, firstSong)
     }
 
     fun closePlaylistDetail(): Boolean {
@@ -77,6 +84,10 @@ class MainPagerAdapter(
             PAGE_HOME -> {
                 val binding = PageHomeBinding.inflate(inflater, parent, false)
                 HomeViewHolder(binding)
+            }
+            PAGE_HARBOUR -> {
+                val binding = PageHarbourBinding.inflate(inflater, parent, false)
+                HarbourViewHolder(binding)
             }
             PAGE_LIBRARY -> {
                 val binding = PageLibraryBinding.inflate(inflater, parent, false)
@@ -104,6 +115,9 @@ class MainPagerAdapter(
                 holder.init()
                 holder.bind(currentStats, hasSongs)
             }
+            is HarbourViewHolder -> {
+                // Static Coming Soon layout
+            }
             is LibraryViewHolder -> {
                 libraryViewHolder = holder
                 holder.init()
@@ -119,11 +133,7 @@ class MainPagerAdapter(
                 holder.bind(totalTrackCount)
             }
             is BlankViewHolder -> {
-                val title = when (position) {
-                    PAGE_HARBOUR -> "Harbour\nDownload & Stream Music"
-                    else -> ""
-                }
-                holder.bind(title)
+                holder.bind("")
             }
         }
     }
@@ -162,6 +172,10 @@ class MainPagerAdapter(
             }
         }
     }
+
+    inner class HarbourViewHolder(
+        val binding: PageHarbourBinding
+    ) : RecyclerView.ViewHolder(binding.root)
 
     inner class LibraryViewHolder(
         val binding: PageLibraryBinding
@@ -217,12 +231,28 @@ class MainPagerAdapter(
             }
         }
 
-        fun showDetail(playlistName: String, songsCount: Int) {
+        fun showDetail(playlistName: String, songsCount: Int, firstSong: Song? = null) {
             activePlaylistName = playlistName
             binding.layoutPlaylistsOverview.visibility = View.GONE
             binding.layoutPlaylistDetail.visibility = View.VISIBLE
             binding.tvDetailPlaylistName.text = playlistName
             binding.tvDetailPlaylistCount.text = "$songsCount ${if (songsCount == 1) "track" else "tracks"}"
+
+            if (firstSong != null) {
+                binding.ivDetailPlaylistCover.scaleType = ImageView.ScaleType.CENTER_CROP
+                binding.ivDetailPlaylistCover.setPadding(0, 0, 0, 0)
+                binding.ivDetailPlaylistCover.clearColorFilter()
+                ThumbnailLoader.loadThumbnail(binding.ivDetailPlaylistCover, firstSong)
+            } else {
+                binding.ivDetailPlaylistCover.scaleType = ImageView.ScaleType.CENTER_INSIDE
+                val pad = (10 * binding.root.resources.displayMetrics.density).toInt()
+                binding.ivDetailPlaylistCover.setPadding(pad, pad, pad, pad)
+                binding.ivDetailPlaylistCover.setImageResource(R.drawable.ic_tab_playlist)
+                binding.ivDetailPlaylistCover.setColorFilter(
+                    ContextCompat.getColor(binding.root.context, R.color.tab_active_tint),
+                    PorterDuff.Mode.SRC_IN
+                )
+            }
 
             if (songsCount == 0) {
                 binding.playlistSongsEmptyState.visibility = View.VISIBLE
