@@ -11,8 +11,8 @@
         <item name="android:windowActivityTransitions">true</item>
         <item name="android:forceDarkAllowed">false</item>
 
-        <!-- Android 12+ Instant Splash Screen (Mewsic logo centered, branding at bottom) -->
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_mewsic_logo</item>
+        <!-- Android 12+ Instant Splash Screen (Mewsic squircle logo centered, branding at bottom) -->
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_squircle</item>
         <item name="android:windowSplashScreenBackground">@color/background_dark</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@color/background_dark</item>
         <item name="android:windowSplashScreenBrandingImage">@drawable/branding_by_xeoniii</item>

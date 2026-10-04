@@ -343,15 +343,44 @@
             android:layout_gravity="center"
             android:background="@drawable/bg_ambient_glow" />
 
-        <!-- Center App Logo (Clean Instagram-Style) -->
-        <ImageView
-            android:id="@+id/ivSplashLogo"
-            android:layout_width="92dp"
-            android:layout_height="92dp"
+        <!-- Center Branding & Loading Container -->
+        <LinearLayout
+            android:id="@+id/brandingContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:contentDescription="@string/content_desc_logo"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_mewsic_logo" />
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <!-- Center App Logo (Clean Squircle matching system splash) -->
+            <ImageView
+                android:id="@+id/ivSplashLogo"
+                android:layout_width="104dp"
+                android:layout_height="104dp"
+                android:contentDescription="@string/content_desc_logo"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_mewsic_logo" />
+
+            <!-- Sleek Loading Bar Track -->
+            <FrameLayout
+                android:id="@+id/loadingTrack"
+                android:layout_width="160dp"
+                android:layout_height="3.5dp"
+                android:layout_marginTop="28dp"
+                android:background="@drawable/bg_loading_track"
+                android:clipChildren="true"
+                android:clipToPadding="true">
+
+                <!-- Filling Indicator Bar (animates scaleX from 0f to 1f) -->
+                <View
+                    android:id="@+id/loadingIndicator"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_loading_indicator" />
+
+            </FrameLayout>
+
+        </LinearLayout>
 
         <!-- Bottom Branding: "by xeoniii.dev" like Instagram's "from Meta" -->
         <LinearLayout
