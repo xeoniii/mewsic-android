@@ -4,6 +4,15 @@
     android:layout_height="match_parent"
     android:background="@color/background_dark">
 
-    <!-- Blank Canvas: ready for page design -->
+    <!-- Page Name in the center of the canvas -->
+    <TextView
+        android:id="@+id/tvPageTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:fontFamily="sans-serif-medium"
+        android:letterSpacing="0.03"
+        android:textColor="@color/text_secondary"
+        android:textSize="26sp" />
 
 </FrameLayout>

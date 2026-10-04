@@ -12,6 +12,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -28,17 +29,16 @@ class MainActivity : AppCompatActivity() {
 
     private data class NavTab(
         val container: View,
-        val icon: View,
-        val label: View
+        val icon: View
     )
 
     private val navTabs by lazy {
         listOf(
-            NavTab(binding.tabHome, binding.ivTabHome, binding.tvTabHome),
-            NavTab(binding.tabLibrary, binding.ivTabLibrary, binding.tvTabLibrary),
-            NavTab(binding.tabPlaylist, binding.ivTabPlaylist, binding.tvTabPlaylist),
-            NavTab(binding.tabHarbour, binding.ivTabHarbour, binding.tvTabHarbour),
-            NavTab(binding.tabSettings, binding.ivTabSettings, binding.tvTabSettings)
+            NavTab(binding.tabHome, binding.ivTabHome),
+            NavTab(binding.tabLibrary, binding.ivTabLibrary),
+            NavTab(binding.tabPlaylist, binding.ivTabPlaylist),
+            NavTab(binding.tabHarbour, binding.ivTabHarbour),
+            NavTab(binding.tabSettings, binding.ivTabSettings)
         )
     }
 
@@ -91,14 +91,6 @@ class MainActivity : AppCompatActivity() {
             val isSelected = (index == position)
             tab.container.isSelected = isSelected
             tab.icon.isSelected = isSelected
-            tab.label.isSelected = isSelected
-        }
-
-        // Smoothly scroll top bar to keep selected tab centered
-        val selectedContainer = navTabs.getOrNull(position)?.container ?: return
-        binding.navScrollView.post {
-            val scrollX = selectedContainer.left - (binding.navScrollView.width / 2) + (selectedContainer.width / 2)
-            binding.navScrollView.smoothScrollTo(scrollX.coerceAtLeast(0), 0)
         }
     }
 
@@ -188,7 +180,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private class BlankPagesAdapter : RecyclerView.Adapter<BlankPagesAdapter.PageViewHolder>() {
-        override fun getItemCount(): Int = 5
+        private val pageTitles = listOf("Home", "Library", "Playlist", "Harbour", "Settings")
+
+        override fun getItemCount(): Int = pageTitles.size
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PageViewHolder {
             val view = LayoutInflater.from(parent.context).inflate(R.layout.item_blank_page, parent, false)
@@ -196,7 +190,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-            // Blank canvas ready for designing
+            val tvPageTitle = holder.itemView.findViewById<TextView>(R.id.tvPageTitle)
+            tvPageTitle?.text = pageTitles[position]
         }
 
         class PageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView)
