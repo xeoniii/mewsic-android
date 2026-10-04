@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mewsic</string>
+    <string name="tagline">Pure Sound. Ultra-Smooth.</string>
+    <string name="app_description">High-performance music player designed for speed and low memory usage.</string>
+    <string name="content_desc_logo">Mewsic App Logo</string>
+</resources>

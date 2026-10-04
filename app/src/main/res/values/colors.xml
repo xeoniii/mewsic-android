@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand Colors inspired by Mewsic logo -->
+    <color name="brand_primary">#2E7D32</color>
+    <color name="brand_primary_variant">#1B5E20</color>
+    <color name="brand_accent">#43A047</color>
+    <color name="brand_emerald">#10B981</color>
+    <color name="brand_navy_deep">#0B132B</color>
+
+    <!-- AMOLED Dark Theme (Minimal GPU fill-rate, battery-efficient) -->
+    <color name="background_dark">#080C14</color>
+    <color name="surface_dark">#0F172A</color>
+    <color name="surface_card">#1E293B</color>
+
+    <!-- Text & Icon Colors -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#94A3B8</color>
+    <color name="text_tertiary">#64748B</color>
+
+    <!-- System Bar Colors -->
+    <color name="status_bar_color">#080C14</color>
+    <color name="nav_bar_color">#080C14</color>
+</resources>
