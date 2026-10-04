@@ -7,6 +7,73 @@
     android:background="@color/background_dark"
     tools:context=".MainActivity">
 
-    <!-- Blank Canvas: Start designing your UI here -->
+    <!-- Soft Ambient Halo Glow behind center -->
+    <View
+        android:id="@+id/ambientGlow"
+        android:layout_width="360dp"
+        android:layout_height="360dp"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_ambient_glow" />
+
+    <!-- Center Branding Container -->
+    <LinearLayout
+        android:id="@+id/brandingContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <!-- Logo + Title Row -->
+        <LinearLayout
+            android:id="@+id/headerRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <!-- App Icon (using user's exact icon.png) -->
+            <ImageView
+                android:id="@+id/ivAppIcon"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:contentDescription="@string/content_desc_logo"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_mewsic_logo" />
+
+            <!-- App Title -->
+            <TextView
+                android:id="@+id/tvAppName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:fontFamily="sans-serif-black"
+                android:letterSpacing="0.01"
+                android:text="@string/app_name"
+                android:textColor="@color/text_primary"
+                android:textSize="34sp" />
+
+        </LinearLayout>
+
+        <!-- Smooth Moving Bar Track -->
+        <FrameLayout
+            android:id="@+id/loadingTrack"
+            android:layout_width="190dp"
+            android:layout_height="3.5dp"
+            android:layout_marginTop="20dp"
+            android:background="@drawable/bg_loading_track"
+            android:clipChildren="true"
+            android:clipToPadding="true">
+
+            <!-- Animated Smooth Indicator Bar -->
+            <View
+                android:id="@+id/loadingIndicator"
+                android:layout_width="70dp"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_loading_indicator" />
+
+        </FrameLayout>
+
+    </LinearLayout>
 
 </FrameLayout>

@@ -19,7 +19,7 @@ if %errorlevel% equ 0 (
 )
 
 :: Check device
-echo ==^> Checking for connected Android device...
+echo ==^> Checking for connected devices...
 %ADB% devices | findstr /R /C:"[a-zA-Z0-9].*device$" >nul
 if %errorlevel% neq 0 (
     echo [!] No authorized Android device detected.
@@ -28,7 +28,7 @@ if %errorlevel% neq 0 (
 )
 
 :: Build APK
-echo ==^> Compiling Mewsic (Debug)...
+echo ==^> Compiling Mewsic...
 call gradlew.bat assembleDebug
 if %errorlevel% neq 0 (
     echo [X] Build failed!
@@ -44,9 +44,9 @@ if %errorlevel% neq 0 (
 )
 
 :: Launch App
-echo ==^> Launching Mewsic instantly...
+echo ==^> Launching Mewsic...
 %ADB% shell am start -n com.mewsic.app/.MainActivity
 
 echo.
-echo [SUCCESS] Mewsic is running on your phone!
+echo [SUCCESS] Mewsic is now running!
 endlocal
