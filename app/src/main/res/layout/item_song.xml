@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="72dp"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp">
+
+    <!-- Album Art Thumbnail -->
+    <ImageView
+        android:id="@+id/ivCover"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:contentDescription="@string/content_desc_logo"
+        android:src="@drawable/ic_mewsic_logo"
+        android:scaleType="centerCrop" />
+
+    <!-- Song Info -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="14dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvSongTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/tvSongSubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <!-- Duration -->
+    <TextView
+        android:id="@+id/tvDuration"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="12dp"
+        android:textColor="@color/text_tertiary"
+        android:textSize="12sp" />
+
+    <!-- Play Action -->
+    <ImageView
+        android:id="@+id/btnPlayAction"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:contentDescription="Play"
+        android:src="@drawable/ic_play" />
+
+</LinearLayout>

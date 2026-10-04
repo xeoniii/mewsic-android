@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background_dark"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <!-- Performance / Spec Badge -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_stat_card"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="14dp">
+
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:contentDescription="@string/content_desc_logo"
+                android:src="@drawable/ic_mewsic_logo" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-bold"
+                    android:text="Mewsic Ultra-Smooth Engine"
+                    android:textColor="@color/brand_emerald"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Native Android • ~14 MB RAM • Zero Lag"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Greeting Header -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:fontFamily="sans-serif-black"
+            android:text="Discover"
+            android:textColor="@color/text_primary"
+            android:textSize="26sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Curated mixes and instant playback"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp" />
+
+        <!-- Section: Daily Mixes (Horizontal Scroll) -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:fontFamily="sans-serif-bold"
+            android:text="Made For You"
+            android:textColor="@color/text_primary"
+            android:textSize="18sp" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:overScrollMode="never"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <!-- Mix 1 -->
+                <LinearLayout
+                    android:id="@+id/cardMix1"
+                    android:layout_width="140dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="14dp"
+                    android:background="@drawable/bg_stat_card"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <ImageView
+                        android:layout_width="116dp"
+                        android:layout_height="116dp"
+                        android:contentDescription="@string/content_desc_logo"
+                        android:src="@drawable/ic_mewsic_logo"
+                        android:scaleType="centerCrop" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:fontFamily="sans-serif-bold"
+                        android:text="Daily Mix 1"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="Synthwave &amp; Chill"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <!-- Mix 2 -->
+                <LinearLayout
+                    android:id="@+id/cardMix2"
+                    android:layout_width="140dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="14dp"
+                    android:background="@drawable/bg_stat_card"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <ImageView
+                        android:layout_width="116dp"
+                        android:layout_height="116dp"
+                        android:contentDescription="@string/content_desc_logo"
+                        android:src="@drawable/ic_mewsic_logo"
+                        android:scaleType="centerCrop" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:fontFamily="sans-serif-bold"
+                        android:text="Bass Pulse"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="High Energy Electronic"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <!-- Mix 3 -->
+                <LinearLayout
+                    android:id="@+id/cardMix3"
+                    android:layout_width="140dp"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_stat_card"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <ImageView
+                        android:layout_width="116dp"
+                        android:layout_height="116dp"
+                        android:contentDescription="@string/content_desc_logo"
+                        android:src="@drawable/ic_mewsic_logo"
+                        android:scaleType="centerCrop" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:fontFamily="sans-serif-bold"
+                        android:text="Focus &amp; Study"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="Ambient Lo-Fi"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <!-- Quick Jump Button to Stress Test Library -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnOpenLibrary"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="28dp"
+            android:backgroundTint="@color/brand_emerald"
+            android:fontFamily="sans-serif-bold"
+            android:text="Test 100-Track Library Scrolling"
+            android:textColor="@color/text_primary"
+            app:cornerRadius="12dp" />
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

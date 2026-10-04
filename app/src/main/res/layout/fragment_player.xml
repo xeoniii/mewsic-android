@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background_dark"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <!-- Header -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-bold"
+        android:letterSpacing="0.08"
+        android:text="NOW PLAYING"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
+
+    <!-- Big Album Art (Using exact icon.png) -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="260dp"
+        android:layout_height="260dp"
+        android:layout_marginTop="32dp"
+        app:cardBackgroundColor="@color/surface_dark"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="8dp"
+        app:strokeColor="@color/surface_card"
+        app:strokeWidth="1dp">
+
+        <ImageView
+            android:id="@+id/ivPlayerCover"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@string/content_desc_logo"
+            android:scaleType="centerCrop"
+            android:src="@drawable/ic_mewsic_logo" />
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Track Details -->
+    <TextView
+        android:id="@+id/tvPlayerTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:fontFamily="sans-serif-black"
+        android:text="Midnight City #1"
+        android:textColor="@color/text_primary"
+        android:textSize="22sp" />
+
+    <TextView
+        android:id="@+id/tvPlayerArtist"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:fontFamily="sans-serif-medium"
+        android:text="Kavinsky • Nightdrive"
+        android:textColor="@color/text_secondary"
+        android:textSize="15sp" />
+
+    <!-- Progress Slider / Bar -->
+    <SeekBar
+        android:id="@+id/seekBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="28dp"
+        android:max="100"
+        android:progress="35"
+        android:progressTint="@color/brand_emerald"
+        android:thumbTint="@color/brand_emerald" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/tvTimeCurrent"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="01:18"
+            android:textColor="@color/text_tertiary"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tvTimeTotal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="03:45"
+            android:textColor="@color/text_tertiary"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- Playback Controls -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/btnShuffle"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="24dp"
+            android:contentDescription="Shuffle"
+            android:src="@drawable/ic_shuffle" />
+
+        <ImageView
+            android:id="@+id/btnPrevious"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="20dp"
+            android:contentDescription="Previous"
+            android:src="@drawable/ic_skip_previous" />
+
+        <!-- Play / Pause Circular Fab -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fabPlayPause"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="Play or Pause"
+            android:src="@drawable/ic_pause"
+            app:backgroundTint="@color/brand_emerald"
+            app:tint="@color/text_primary" />
+
+        <ImageView
+            android:id="@+id/btnNext"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="20dp"
+            android:contentDescription="Next"
+            android:src="@drawable/ic_skip_next" />
+
+        <ImageView
+            android:id="@+id/btnRepeat"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="24dp"
+            android:contentDescription="Repeat"
+            android:src="@drawable/ic_repeat" />
+    </LinearLayout>
+
+</LinearLayout>

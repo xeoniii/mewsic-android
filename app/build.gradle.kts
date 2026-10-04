@@ -60,4 +60,6 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.recyclerview)
+    implementation(libs.androidx.fragment.ktx)
 }

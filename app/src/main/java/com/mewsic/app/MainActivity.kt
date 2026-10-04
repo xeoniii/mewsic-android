@@ -1,62 +1,130 @@
 package com.mewsic.app
 
 import android.os.Bundle
-import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.fragment.app.Fragment
+import com.mewsic.app.data.DummyData
 import com.mewsic.app.databinding.ActivityMainBinding
+import com.mewsic.app.model.Song
+import com.mewsic.app.ui.HomeFragment
+import com.mewsic.app.ui.LibraryFragment
+import com.mewsic.app.ui.PlayerFragment
 
-/**
- * MainActivity - Lightweight, zero-overhead entry point for Mewsic.
- *
- * Optimized specifically for low-end devices (e.g. 1GB RAM):
- * - Native ViewBinding with zero reflection overhead
- * - Minimal layout hierarchy depth (1 FrameLayout + 1 LinearLayout) to prevent GC pauses
- * - Hardware acceleration enabled with optimal layer types
- * - RAM footprint < 15MB
- */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
 
+    private val homeFragment = HomeFragment()
+    private val libraryFragment = LibraryFragment()
+    private val playerFragment = PlayerFragment()
+
+    var currentSong: Song = DummyData.getDummySongs().first()
+        private set
+    var isPlaying: Boolean = true
+        private set
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Enable edge-to-edge rendering with transparent status & navigation bars
+        // Enable edge-to-edge rendering
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Handle system bar insets cleanly without causing layout reflows
-        ViewCompat.setOnApplyWindowInsetsListener(binding.rootContainer) { view, insets ->
+        // Apply system bar insets without causing layout shifts
+        ViewCompat.setOnApplyWindowInsetsListener(binding.rootContainer) { _, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            binding.rootContainer.setPadding(0, systemBars.top, 0, 0)
+            binding.bottomNav.setPadding(0, 0, 0, systemBars.bottom)
             insets
         }
 
-        // Smooth subtle entrance animation using hardware layer
-        setupEntranceAnimation()
+        setupBottomNavigation()
+        setupMiniPlayer()
+
+        // Set default fragment
+        if (savedInstanceState == null) {
+            setFragment(homeFragment)
+        }
     }
 
-    private fun setupEntranceAnimation() {
-        binding.ivLogo.apply {
-            alpha = 0f
-            scaleX = 0.92f
-            scaleY = 0.92f
-            // Use hardware layer during animation to avoid continuous software redraws
-            setLayerType(View.LAYER_TYPE_HARDWARE, null)
-            animate()
-                .alpha(1f)
-                .scaleX(1f)
-                .scaleY(1f)
-                .setDuration(400)
-                .withEndAction {
-                    setLayerType(View.LAYER_TYPE_NONE, null)
+    private fun setupBottomNavigation() {
+        binding.bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.menu_home -> {
+                    setFragment(homeFragment)
+                    true
                 }
-                .start()
+                R.id.menu_library -> {
+                    setFragment(libraryFragment)
+                    true
+                }
+                R.id.menu_player -> {
+                    setFragment(playerFragment)
+                    true
+                }
+                else -> false
+            }
         }
+    }
+
+    private fun setupMiniPlayer() {
+        updateMiniPlayerUI()
+
+        binding.miniPlayerBar.setOnClickListener {
+            navigateToTab(R.id.menu_player)
+        }
+
+        binding.btnMiniPlayPause.setOnClickListener {
+            togglePlayPause()
+        }
+    }
+
+    fun navigateToTab(menuItemId: Int) {
+        binding.bottomNav.selectedItemId = menuItemId
+    }
+
+    fun playSong(song: Song) {
+        currentSong = song
+        isPlaying = true
+        updateMiniPlayerUI()
+        playerFragment.updateUI(currentSong, isPlaying)
+    }
+
+    fun togglePlayPause() {
+        isPlaying = !isPlaying
+        updateMiniPlayerUI()
+        playerFragment.updateUI(currentSong, isPlaying)
+    }
+
+    fun playNext() {
+        val songs = DummyData.getDummySongs()
+        val currentIndex = songs.indexOfFirst { it.id == currentSong.id }
+        val nextIndex = (currentIndex + 1) % songs.size
+        playSong(songs[nextIndex])
+    }
+
+    fun playPrevious() {
+        val songs = DummyData.getDummySongs()
+        val currentIndex = songs.indexOfFirst { it.id == currentSong.id }
+        val prevIndex = if (currentIndex <= 0) songs.size - 1 else currentIndex - 1
+        playSong(songs[prevIndex])
+    }
+
+    private fun updateMiniPlayerUI() {
+        binding.tvMiniTitle.text = currentSong.title
+        binding.tvMiniArtist.text = "${currentSong.artist} • ${currentSong.album}"
+        val icon = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+        binding.btnMiniPlayPause.setImageResource(icon)
+    }
+
+    private fun setFragment(fragment: Fragment) {
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragmentContainer, fragment)
+            .commit()
     }
 }
