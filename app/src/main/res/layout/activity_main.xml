@@ -48,9 +48,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingStart="6dp"
-                    android:paddingEnd="6dp">
+                    android:orientation="horizontal">
 
                     <!-- 1. Home Tab -->
                     <FrameLayout
@@ -58,14 +56,14 @@
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
                         android:layout_weight="1"
-                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:background="@null"
                         android:clickable="true"
                         android:focusable="true">
 
                         <ImageView
                             android:id="@+id/ivTabHome"
-                            android:layout_width="25dp"
-                            android:layout_height="25dp"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
                             android:layout_gravity="center"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_tab_home" />
@@ -77,14 +75,14 @@
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
                         android:layout_weight="1"
-                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:background="@null"
                         android:clickable="true"
                         android:focusable="true">
 
                         <ImageView
                             android:id="@+id/ivTabHarbour"
-                            android:layout_width="25dp"
-                            android:layout_height="25dp"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
                             android:layout_gravity="center"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_tab_harbour" />
@@ -96,14 +94,14 @@
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
                         android:layout_weight="1"
-                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:background="@null"
                         android:clickable="true"
                         android:focusable="true">
 
                         <ImageView
                             android:id="@+id/ivTabLibrary"
-                            android:layout_width="25dp"
-                            android:layout_height="25dp"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
                             android:layout_gravity="center"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_tab_library" />
@@ -115,14 +113,14 @@
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
                         android:layout_weight="1"
-                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:background="@null"
                         android:clickable="true"
                         android:focusable="true">
 
                         <ImageView
                             android:id="@+id/ivTabPlaylist"
-                            android:layout_width="25dp"
-                            android:layout_height="25dp"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
                             android:layout_gravity="center"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_tab_playlist" />
@@ -134,19 +132,18 @@
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
                         android:layout_weight="1"
-                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:background="@null"
                         android:clickable="true"
                         android:focusable="true">
 
                         <ImageView
                             android:id="@+id/ivTabSettings"
-                            android:layout_width="25dp"
-                            android:layout_height="25dp"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
                             android:layout_gravity="center"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_tab_settings" />
                     </FrameLayout>
-
                 </LinearLayout>
             </FrameLayout>
         </FrameLayout>

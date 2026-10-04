@@ -102,12 +102,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateIndicator(position: Int, positionOffset: Float) {
-        val rowWidth = binding.tabIconsRow.width.toFloat()
-        if (rowWidth <= 0 || navTabs.isEmpty()) return
+        if (navTabs.isEmpty()) return
+        val currentTab = navTabs.getOrNull(position) ?: return
+        val nextTab = navTabs.getOrNull(position + 1) ?: currentTab
 
-        val tabWidth = rowWidth / navTabs.size.toFloat()
         val currentProgress = position.toFloat() + positionOffset
-        val targetCenterX = binding.tabIconsRow.left + (currentProgress + 0.5f) * tabWidth
+        val currentTabWidth = currentTab.touchTarget.width.toFloat()
+        val targetCenterX = if (currentTabWidth > 0f) {
+            val currentCenterX = binding.tabIconsRow.left + currentTab.touchTarget.left + (currentTabWidth / 2f)
+            val nextCenterX = binding.tabIconsRow.left + nextTab.touchTarget.left + (nextTab.touchTarget.width.toFloat() / 2f)
+            currentCenterX + positionOffset * (nextCenterX - currentCenterX)
+        } else {
+            val rowWidth = binding.tabIconsRow.width.toFloat()
+            if (rowWidth <= 0f) return
+            val tabWidth = rowWidth / navTabs.size.toFloat()
+            binding.tabIconsRow.left + (currentProgress + 0.5f) * tabWidth
+        }
 
         binding.activeIndicator.translationX = targetCenterX - (binding.activeIndicator.width / 2f)
 
@@ -254,6 +264,11 @@ class MainActivity : AppCompatActivity() {
                             binding.loadingScreenContainer.visibility = View.GONE
                             binding.blankContentContainer.visibility = View.VISIBLE
                             glowAnimator?.cancel()
+
+                            // Re-align indicator with measured tabs
+                            binding.tabBarContainer.post {
+                                updateIndicator(binding.viewPager.currentItem, 0f)
+                            }
 
                             // Premium floating entrance animation for top navigation bar
                             binding.topBarWrapper.alpha = 0f
