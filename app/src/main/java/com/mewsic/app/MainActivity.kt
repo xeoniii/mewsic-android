@@ -9,6 +9,7 @@ import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
 import android.animation.ValueAnimator
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.PorterDuff
 import android.media.MediaPlayer
 import android.os.Build
@@ -30,6 +31,7 @@ import com.mewsic.app.adapter.MainPagerAdapter
 import com.mewsic.app.adapter.SongAdapter
 import com.mewsic.app.databinding.ActivityMainBinding
 import com.mewsic.app.model.Song
+import com.mewsic.app.scanner.LibraryCache
 import com.mewsic.app.scanner.MediaScanner
 import com.mewsic.app.scanner.ThumbnailLoader
 import kotlinx.coroutines.Job
@@ -67,12 +69,6 @@ class MainActivity : AppCompatActivity() {
             libraryAdapter = librarySongAdapter,
             onExploreLibraryClicked = {
                 binding.viewPager.setCurrentItem(MainPagerAdapter.PAGE_LIBRARY, true)
-            },
-            onRequestPermissionClicked = {
-                checkAndRequestAudioPermission()
-            },
-            onRescanLibraryClicked = {
-                startAudioScan()
             }
         )
     }
@@ -82,7 +78,7 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            startAudioScan()
+            silentBackgroundScan()
         }
     }
 
@@ -119,7 +115,20 @@ class MainActivity : AppCompatActivity() {
 
         setupNavigation()
         setupPlayerBar()
+
+        // 1. Immediately load cached library so app already knows everything on launch
+        loadInitialCachedLibrary()
+
+        // 2. Start cold-start branding animation
         startLoadingSequence()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Orientation changed without activity reload - re-align indicator to active tab
+        binding.tabBarContainer.post {
+            updateIndicator(binding.viewPager.currentItem, 0f)
+        }
     }
 
     private fun setupNavigation() {
@@ -206,6 +215,19 @@ class MainActivity : AppCompatActivity() {
             .start()
     }
 
+    /**
+     * Instantly populates the UI with cached songs from disk/memory
+     * so that the app immediately displays content without waiting for a scan.
+     */
+    private fun loadInitialCachedLibrary() {
+        lifecycleScope.launch {
+            val cached = LibraryCache.loadCachedSongs(this@MainActivity)
+            if (cached.isNotEmpty()) {
+                applySongsToUI(cached)
+            }
+        }
+    }
+
     private fun checkAndRequestAudioPermission() {
         val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_AUDIO
@@ -214,29 +236,46 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED) {
-            startAudioScan()
+            silentBackgroundScan()
         } else {
             permissionLauncher.launch(permission)
         }
     }
 
-    private fun startAudioScan() {
+    /**
+     * Silently scans the device in the background and smoothly updates
+     * the UI via DiffUtil only if additions or changes occurred.
+     */
+    private fun silentBackgroundScan() {
         lifecycleScope.launch {
-            val songs = MediaScanner.scanDeviceAudio(this@MainActivity)
-            allSongs = songs
+            val scannedSongs = MediaScanner.scanDeviceAudio(this@MainActivity)
 
-            // Home Page: songs displayed in order of date added / modified (newest first)
-            recentSongs = songs.sortedByDescending { maxOf(it.dateAdded, it.dateModified) }
-            val stats = MediaScanner.computeLibraryStats(songs)
-
-            homeSongAdapter.submitList(recentSongs.take(20))
-            librarySongAdapter.submitList(allSongs)
-            pagerAdapter.updateData(stats, allSongs.size)
-
-            // Prime player bar with the most recently added song if idle
-            if (currentPlayingSong == null && recentSongs.isNotEmpty()) {
-                primePlayerBar(recentSongs.first())
+            // Only update if dataset actually changed or was previously empty
+            if (hasLibraryChanged(allSongs, scannedSongs)) {
+                applySongsToUI(scannedSongs)
+                LibraryCache.saveCachedSongs(this@MainActivity, scannedSongs)
             }
+        }
+    }
+
+    private fun hasLibraryChanged(current: List<Song>, fresh: List<Song>): Boolean {
+        if (current.size != fresh.size) return true
+        val currentIds = current.map { it.id }.toSet()
+        return fresh.any { it.id !in currentIds }
+    }
+
+    private fun applySongsToUI(songs: List<Song>) {
+        allSongs = songs
+        recentSongs = songs.sortedByDescending { maxOf(it.dateAdded, it.dateModified) }
+        val stats = MediaScanner.computeLibraryStats(songs)
+
+        homeSongAdapter.submitList(recentSongs.take(20))
+        librarySongAdapter.submitList(allSongs)
+        pagerAdapter.updateData(stats, allSongs.size)
+
+        // Prime player bar with the most recently added song if idle
+        if (currentPlayingSong == null && recentSongs.isNotEmpty()) {
+            primePlayerBar(recentSongs.first())
         }
     }
 
@@ -457,7 +496,7 @@ class MainActivity : AppCompatActivity() {
                                 updateIndicator(binding.viewPager.currentItem, 0f)
                             }
 
-                            // Start scanning device audio files
+                            // Silently sync device audio in the background
                             checkAndRequestAudioPermission()
 
                             // Premium floating entrance animation for top navigation bar

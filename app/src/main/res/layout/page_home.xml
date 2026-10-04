@@ -201,18 +201,6 @@
                 android:text="No music files found on device"
                 android:textColor="#898D8E"
                 android:textSize="14sp" />
-
-            <Button
-                android:id="@+id/btnScanPermission"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:layout_marginTop="16dp"
-                android:backgroundTint="#1ADA6B"
-                android:fontFamily="sans-serif-bold"
-                android:text="Scan Audio Files"
-                android:textAllCaps="false"
-                android:textColor="#080C14"
-                android:textSize="13sp" />
         </LinearLayout>
 
         <!-- Recently Added Songs RecyclerView -->

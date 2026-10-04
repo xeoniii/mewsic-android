@@ -13,9 +13,7 @@ import com.mewsic.app.scanner.LibraryStats
 class MainPagerAdapter(
     private val homeAdapter: SongAdapter,
     private val libraryAdapter: SongAdapter,
-    private val onExploreLibraryClicked: () -> Unit,
-    private val onRequestPermissionClicked: () -> Unit,
-    private val onRescanLibraryClicked: () -> Unit
+    private val onExploreLibraryClicked: () -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     companion object {
@@ -101,10 +99,6 @@ class MainPagerAdapter(
             binding.btnExploreLibrary.setOnClickListener {
                 onExploreLibraryClicked()
             }
-
-            binding.btnScanPermission.setOnClickListener {
-                onRequestPermissionClicked()
-            }
         }
 
         fun bind(stats: LibraryStats?, hasSongs: Boolean) {
@@ -134,10 +128,6 @@ class MainPagerAdapter(
             if (binding.rvLibrarySongs.adapter == null) {
                 binding.rvLibrarySongs.layoutManager = LinearLayoutManager(itemView.context)
                 binding.rvLibrarySongs.adapter = libraryAdapter
-            }
-
-            binding.btnRescanLibrary.setOnClickListener {
-                onRescanLibraryClicked()
             }
         }
 

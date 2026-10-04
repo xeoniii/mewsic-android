@@ -42,23 +42,6 @@
                 android:textSize="12sp"
                 tools:text="49 tracks on this device" />
         </LinearLayout>
-
-        <!-- Rescan Button -->
-        <FrameLayout
-            android:id="@+id/btnRescanLibrary"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:clickable="true"
-            android:focusable="true">
-
-            <ImageView
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:layout_gravity="center"
-                android:src="@drawable/ic_tab_library"
-                app:tint="#1ADA6B" />
-        </FrameLayout>
     </LinearLayout>
 
     <!-- Empty State Container -->
