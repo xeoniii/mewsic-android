@@ -1,5 +1,6 @@
 package com.mewsic.app
 
+import android.Manifest
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ArgbEvaluator
@@ -7,23 +8,33 @@ import android.animation.Keyframe
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
 import android.animation.ValueAnimator
+import android.content.pm.PackageManager
 import android.graphics.PorterDuff
+import android.media.MediaPlayer
+import android.os.Build
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.widget.ImageView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.recyclerview.widget.RecyclerView
+import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
+import com.mewsic.app.adapter.MainPagerAdapter
+import com.mewsic.app.adapter.SongAdapter
 import com.mewsic.app.databinding.ActivityMainBinding
+import com.mewsic.app.model.Song
+import com.mewsic.app.scanner.MediaScanner
+import com.mewsic.app.scanner.ThumbnailLoader
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
@@ -31,7 +42,49 @@ class MainActivity : AppCompatActivity() {
     private var loadAnimator: ObjectAnimator? = null
     private var glowAnimator: ObjectAnimator? = null
     private val argbEvaluator = ArgbEvaluator()
-    private var isPlaying = true
+
+    // Audio Playback State
+    private var isPlaying = false
+    private var currentPlayingSong: Song? = null
+    private var mediaPlayer: MediaPlayer? = null
+    private var progressTrackingJob: Job? = null
+
+    // Scanned Music Datasets
+    private var allSongs: List<Song> = emptyList()
+    private var recentSongs: List<Song> = emptyList()
+
+    private val homeSongAdapter by lazy {
+        SongAdapter { song, _ -> playSong(song) }
+    }
+
+    private val librarySongAdapter by lazy {
+        SongAdapter { song, _ -> playSong(song) }
+    }
+
+    private val pagerAdapter by lazy {
+        MainPagerAdapter(
+            homeAdapter = homeSongAdapter,
+            libraryAdapter = librarySongAdapter,
+            onExploreLibraryClicked = {
+                binding.viewPager.setCurrentItem(MainPagerAdapter.PAGE_LIBRARY, true)
+            },
+            onRequestPermissionClicked = {
+                checkAndRequestAudioPermission()
+            },
+            onRescanLibraryClicked = {
+                startAudioScan()
+            }
+        )
+    }
+
+    // Permission launcher for reading audio files on device
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            startAudioScan()
+        }
+    }
 
     private data class NavTab(
         val touchTarget: View,
@@ -70,8 +123,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupNavigation() {
-        // Setup ViewPager2 with 5 swipeable blank canvas pages
-        binding.viewPager.adapter = BlankPagesAdapter()
+        // Setup ViewPager2 with MainPagerAdapter (Home, Harbour, Library, Playlist, Settings)
+        binding.viewPager.adapter = pagerAdapter
         binding.viewPager.offscreenPageLimit = 4
 
         // Synchronize page swipes with top tabs via real-time smooth tracking
@@ -153,18 +206,151 @@ class MainActivity : AppCompatActivity() {
             .start()
     }
 
+    private fun checkAndRequestAudioPermission() {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+
+        if (ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED) {
+            startAudioScan()
+        } else {
+            permissionLauncher.launch(permission)
+        }
+    }
+
+    private fun startAudioScan() {
+        lifecycleScope.launch {
+            val songs = MediaScanner.scanDeviceAudio(this@MainActivity)
+            allSongs = songs
+
+            // Home Page: songs displayed in order of date added / modified (newest first)
+            recentSongs = songs.sortedByDescending { maxOf(it.dateAdded, it.dateModified) }
+            val stats = MediaScanner.computeLibraryStats(songs)
+
+            homeSongAdapter.submitList(recentSongs.take(20))
+            librarySongAdapter.submitList(allSongs)
+            pagerAdapter.updateData(stats, allSongs.size)
+
+            // Prime player bar with the most recently added song if idle
+            if (currentPlayingSong == null && recentSongs.isNotEmpty()) {
+                primePlayerBar(recentSongs.first())
+            }
+        }
+    }
+
+    private fun primePlayerBar(song: Song) {
+        currentPlayingSong = song
+        binding.tvPlayerTitle.text = song.title
+        binding.tvPlayerArtist.text = song.artist
+        ThumbnailLoader.loadThumbnail(binding.ivPlayerAlbumArt, song)
+        binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
+        isPlaying = false
+        binding.playerProgressBar.pivotX = 0f
+        binding.playerProgressBar.scaleX = 0f
+    }
+
+    private fun playSong(song: Song) {
+        currentPlayingSong = song
+        homeSongAdapter.activeSongId = song.id
+        librarySongAdapter.activeSongId = song.id
+
+        // Update player bar info
+        binding.tvPlayerTitle.text = song.title
+        binding.tvPlayerArtist.text = song.artist
+        ThumbnailLoader.loadThumbnail(binding.ivPlayerAlbumArt, song)
+
+        try {
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+            mediaPlayer = MediaPlayer().apply {
+                setDataSource(applicationContext, song.contentUri)
+                prepare()
+                start()
+                setOnCompletionListener {
+                    playNextSong()
+                }
+            }
+            isPlaying = true
+            binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_pause)
+            startProgressTracking()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun togglePlayPause() {
+        if (currentPlayingSong == null) {
+            val firstSong = recentSongs.firstOrNull() ?: allSongs.firstOrNull()
+            if (firstSong != null) {
+                playSong(firstSong)
+                return
+            }
+        }
+
+        val player = mediaPlayer
+        if (isPlaying && player != null) {
+            player.pause()
+            isPlaying = false
+            binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
+            progressTrackingJob?.cancel()
+        } else {
+            if (player != null) {
+                player.start()
+                isPlaying = true
+                binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_pause)
+                startProgressTracking()
+            } else {
+                currentPlayingSong?.let { playSong(it) }
+            }
+        }
+    }
+
+    private fun playNextSong() {
+        val list = if (binding.viewPager.currentItem == MainPagerAdapter.PAGE_HOME) recentSongs else allSongs
+        if (list.isEmpty()) return
+        val idx = list.indexOfFirst { it.id == currentPlayingSong?.id }
+        val nextIdx = if (idx in 0 until list.size - 1) idx + 1 else 0
+        playSong(list[nextIdx])
+    }
+
+    private fun playPrevSong() {
+        val list = if (binding.viewPager.currentItem == MainPagerAdapter.PAGE_HOME) recentSongs else allSongs
+        if (list.isEmpty()) return
+        val idx = list.indexOfFirst { it.id == currentPlayingSong?.id }
+        val prevIdx = if (idx > 0) idx - 1 else list.size - 1
+        playSong(list[prevIdx])
+    }
+
+    private fun startProgressTracking() {
+        progressTrackingJob?.cancel()
+        binding.playerProgressBar.pivotX = 0f
+        progressTrackingJob = lifecycleScope.launch {
+            while (isPlaying) {
+                val player = mediaPlayer
+                if (player != null && player.isPlaying) {
+                    val duration = player.duration
+                    val current = player.currentPosition
+                    if (duration > 0) {
+                        val fraction = (current.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+                        binding.playerProgressBar.scaleX = fraction
+                    }
+                }
+                delay(500)
+            }
+        }
+    }
+
     private fun setupPlayerBar() {
         // Toggle play/pause state with tactile micro-bounce
         binding.btnPlayerPlayPause.setOnClickListener {
-            isPlaying = !isPlaying
             binding.btnPlayerPlayPause.animate()
                 .scaleX(0.82f)
                 .scaleY(0.82f)
                 .setDuration(90)
                 .withEndAction {
-                    binding.ivPlayPauseIcon.setImageResource(
-                        if (isPlaying) R.drawable.ic_player_pause else R.drawable.ic_player_play
-                    )
+                    togglePlayPause()
                     binding.btnPlayerPlayPause.animate()
                         .scaleX(1.0f)
                         .scaleY(1.0f)
@@ -181,6 +367,7 @@ class MainActivity : AppCompatActivity() {
                 .scaleY(0.85f)
                 .setDuration(80)
                 .withEndAction {
+                    playNextSong()
                     binding.btnPlayerNext.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start()
                 }
                 .start()
@@ -192,6 +379,7 @@ class MainActivity : AppCompatActivity() {
                 .scaleY(0.85f)
                 .setDuration(80)
                 .withEndAction {
+                    playPrevSong()
                     binding.btnPlayerPrev.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start()
                 }
                 .start()
@@ -242,7 +430,7 @@ class MainActivity : AppCompatActivity() {
         val kf1 = Keyframe.ofFloat(0.45f, 0.58f).apply {
             interpolator = DecelerateInterpolator()
         }
-        val kf2 = Keyframe.ofFloat(0.65f, 0.64f).apply { // Hiccup pause
+        val kf2 = Keyframe.ofFloat(0.65f, 0.64f).apply {
             interpolator = AccelerateDecelerateInterpolator()
         }
         val kf3 = Keyframe.ofFloat(1.0f, 1.0f).apply {
@@ -255,7 +443,6 @@ class MainActivity : AppCompatActivity() {
             duration = 1750
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
-                    // Slight hold at 100%, then fade out loading screen into main screen
                     binding.loadingScreenContainer.animate()
                         .alpha(0f)
                         .setDuration(400)
@@ -269,6 +456,9 @@ class MainActivity : AppCompatActivity() {
                             binding.tabBarContainer.post {
                                 updateIndicator(binding.viewPager.currentItem, 0f)
                             }
+
+                            // Start scanning device audio files
+                            checkAndRequestAudioPermission()
 
                             // Premium floating entrance animation for top navigation bar
                             binding.topBarWrapper.alpha = 0f
@@ -300,21 +490,9 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         loadAnimator?.cancel()
         glowAnimator?.cancel()
+        progressTrackingJob?.cancel()
+        mediaPlayer?.release()
+        mediaPlayer = null
         super.onDestroy()
-    }
-
-    private class BlankPagesAdapter : RecyclerView.Adapter<BlankPagesAdapter.PageViewHolder>() {
-        override fun getItemCount(): Int = 5
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PageViewHolder {
-            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_blank_page, parent, false)
-            return PageViewHolder(view)
-        }
-
-        override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-            // Blank canvas ready for custom UI design
-        }
-
-        class PageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView)
     }
 }

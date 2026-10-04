@@ -1,0 +1,34 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Outer circle cx=12, cy=12, r=10 -->
+    <path
+        android:pathData="M12,2 A10,10 0 1,0 12,22 A10,10 0 1,0 12,2"
+        android:strokeWidth="2"
+        android:strokeColor="#1ADA6B"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- Left groove: M6 12c0-1.7.7-3.2 1.8-4.2 -->
+    <path
+        android:pathData="M6,12c0,-1.7 0.7,-3.2 1.8,-4.2"
+        android:strokeWidth="2"
+        android:strokeColor="#1ADA6B"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- Center hole: circle cx=12, cy=12, r=2 -->
+    <path
+        android:pathData="M12,10 A2,2 0 1,0 12,14 A2,2 0 1,0 12,10"
+        android:strokeWidth="2"
+        android:strokeColor="#1ADA6B"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- Right groove: M18 12c0 1.7-.7 3.2-1.8 4.2 -->
+    <path
+        android:pathData="M18,12c0,1.7 -0.7,3.2 -1.8,4.2"
+        android:strokeWidth="2"
+        android:strokeColor="#1ADA6B"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
