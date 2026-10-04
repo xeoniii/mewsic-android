@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.Mewsic" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/brand_emerald</item>
+        <item name="colorOnPrimary">@color/text_primary</item>
+        <item name="android:windowBackground">@color/background_dark</item>
+        <item name="android:statusBarColor">@color/status_bar_color</item>
+        <item name="android:navigationBarColor">@color/nav_bar_color</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowActivityTransitions">true</item>
+        <item name="android:forceDarkAllowed">false</item>
+
+        <!-- Android 12+ Instant Splash Screen (Mewsic logo centered, branding at bottom) -->
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_mewsic_logo</item>
+        <item name="android:windowSplashScreenBackground">@color/background_dark</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/background_dark</item>
+        <item name="android:windowSplashScreenBrandingImage">@drawable/branding_by_xeoniii</item>
+    </style>
+</resources>

@@ -22,7 +22,10 @@ class SongAdapter(
             val oldId = field
             field = value
             if (oldId != value) {
-                notifyDataSetChanged()
+                val oldPos = currentList.indexOfFirst { it.id == oldId }
+                val newPos = currentList.indexOfFirst { it.id == value }
+                if (oldPos != -1) notifyItemChanged(oldPos)
+                if (newPos != -1) notifyItemChanged(newPos)
             }
         }
 

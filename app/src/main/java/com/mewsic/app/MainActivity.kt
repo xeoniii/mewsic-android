@@ -63,7 +63,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private lateinit var binding: ActivityMainBinding
-    private var loadAnimator: ObjectAnimator? = null
     private var glowAnimator: ObjectAnimator? = null
     private val argbEvaluator = ArgbEvaluator()
 
@@ -72,6 +71,7 @@ class MainActivity : AppCompatActivity() {
     private var currentPlayingSong: Song? = null
     private var mediaPlayer: MediaPlayer? = null
     private var progressTrackingJob: Job? = null
+    private var currentSongToken = 0L
 
     // Scanned Music Datasets
     private var allSongs: List<Song> = emptyList()
@@ -404,25 +404,32 @@ class MainActivity : AppCompatActivity() {
         librarySongAdapter.activeSongId = song.id
         playlistSongsAdapter.activeSongId = song.id
 
-        // Update player bar info
+        // 1. Instantly update player bar UI (0ms delay)
         binding.tvPlayerTitle.text = song.title
         binding.tvPlayerArtist.text = song.artist
         ThumbnailLoader.loadThumbnail(binding.ivPlayerAlbumArt, song)
+        binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_pause)
+        binding.playerProgressBar.pivotX = 0f
+        binding.playerProgressBar.scaleX = 0f
 
+        // 2. Prepare & play audio asynchronously without blocking the UI thread
+        val token = System.currentTimeMillis().also { currentSongToken = it }
         try {
-            mediaPlayer?.stop()
-            mediaPlayer?.release()
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(applicationContext, song.contentUri)
-                prepare()
-                start()
-                setOnCompletionListener {
-                    playNextSong()
+            val player = mediaPlayer ?: MediaPlayer().also { mediaPlayer = it }
+            player.reset()
+            player.setDataSource(applicationContext, song.contentUri)
+            player.setOnPreparedListener { mp ->
+                if (currentSongToken == token) {
+                    mp.start()
+                    isPlaying = true
+                    binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_pause)
+                    startProgressTracking()
                 }
             }
-            isPlaying = true
-            binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_pause)
-            startProgressTracking()
+            player.setOnCompletionListener {
+                playNextSong()
+            }
+            player.prepareAsync()
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -537,25 +544,25 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnPlayerNext.setOnClickListener {
+            playNextSong()
             binding.btnPlayerNext.animate()
                 .scaleX(0.85f)
                 .scaleY(0.85f)
-                .setDuration(80)
+                .setDuration(70)
                 .withEndAction {
-                    playNextSong()
-                    binding.btnPlayerNext.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start()
+                    binding.btnPlayerNext.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
                 }
                 .start()
         }
 
         binding.btnPlayerPrev.setOnClickListener {
+            playPrevSong()
             binding.btnPlayerPrev.animate()
                 .scaleX(0.85f)
                 .scaleY(0.85f)
-                .setDuration(80)
+                .setDuration(70)
                 .withEndAction {
-                    playPrevSong()
-                    binding.btnPlayerPrev.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start()
+                    binding.btnPlayerPrev.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
                 }
                 .start()
         }
@@ -578,101 +585,57 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startLoadingSequence() {
-        // App content is already visible and populating behind the loading screen
+        // App content is already loaded and populating behind the splash screen
         binding.loadingScreenContainer.alpha = 1f
         binding.loadingScreenContainer.visibility = View.VISIBLE
         binding.blankContentContainer.visibility = View.VISIBLE
 
-        // Anchor scale from the left edge (0% -> 100% left-to-right fill)
-        binding.loadingIndicator.pivotX = 0f
-        binding.loadingIndicator.scaleX = 0f
-
-        // Ambient glow breathing pulse
+        // Subtle ambient glow pulse behind Mewsic logo
         glowAnimator?.cancel()
-        glowAnimator = ObjectAnimator.ofFloat(binding.ambientGlow, "alpha", 0.5f, 1.0f).apply {
-            duration = 1400
+        glowAnimator = ObjectAnimator.ofFloat(binding.ambientGlow, "alpha", 0.35f, 0.85f).apply {
+            duration = 750
             repeatMode = ValueAnimator.REVERSE
-            repeatCount = ValueAnimator.INFINITE
+            repeatCount = 1
             interpolator = AccelerateDecelerateInterpolator()
             start()
         }
 
-        // Match bar width to header row and animate
-        binding.headerRow.post {
-            val headerWidth = binding.headerRow.width
-            if (headerWidth > 0) {
-                val params = binding.loadingTrack.layoutParams
-                params.width = headerWidth
-                binding.loadingTrack.layoutParams = params
-            }
+        // Smooth Instagram-style splash transition
+        binding.loadingScreenContainer.postDelayed({
+            binding.loadingScreenContainer.animate()
+                .alpha(0f)
+                .setDuration(350)
+                .withEndAction {
+                    binding.loadingScreenContainer.visibility = View.GONE
+                    glowAnimator?.cancel()
 
-            binding.loadingTrack.post {
-                playLoadingProgressAnimation()
-            }
-        }
-    }
+                    // Re-align indicator with measured tabs
+                    binding.tabBarContainer.post {
+                        updateIndicator(binding.viewPager.currentItem, 0f)
+                    }
 
-    private fun playLoadingProgressAnimation() {
-        loadAnimator?.cancel()
-
-        val kf0 = Keyframe.ofFloat(0.0f, 0.0f).apply {
-            interpolator = AccelerateDecelerateInterpolator()
-        }
-        val kf1 = Keyframe.ofFloat(0.45f, 0.58f).apply {
-            interpolator = DecelerateInterpolator()
-        }
-        val kf2 = Keyframe.ofFloat(0.65f, 0.64f).apply {
-            interpolator = AccelerateDecelerateInterpolator()
-        }
-        val kf3 = Keyframe.ofFloat(1.0f, 1.0f).apply {
-            interpolator = AccelerateDecelerateInterpolator()
-        }
-
-        val pvh = PropertyValuesHolder.ofKeyframe(View.SCALE_X, kf0, kf1, kf2, kf3)
-
-        loadAnimator = ObjectAnimator.ofPropertyValuesHolder(binding.loadingIndicator, pvh).apply {
-            duration = 1750
-            addListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) {
-                    // Smoothly fade out loading overlay revealing the fully-loaded app
-                    binding.loadingScreenContainer.animate()
-                        .alpha(0f)
+                    // Floating entrance animation for top navigation bar
+                    binding.topBarWrapper.alpha = 0f
+                    binding.topBarWrapper.translationY = -30f
+                    binding.topBarWrapper.animate()
+                        .alpha(1f)
+                        .translationY(0f)
                         .setDuration(350)
-                        .setStartDelay(80)
-                        .withEndAction {
-                            binding.loadingScreenContainer.visibility = View.GONE
-                            glowAnimator?.cancel()
+                        .setInterpolator(DecelerateInterpolator())
+                        .start()
 
-                            // Re-align indicator with measured tabs
-                            binding.tabBarContainer.post {
-                                updateIndicator(binding.viewPager.currentItem, 0f)
-                            }
-
-                            // Subtle floating entrance animation for top navigation bar
-                            binding.topBarWrapper.alpha = 0f
-                            binding.topBarWrapper.translationY = -30f
-                            binding.topBarWrapper.animate()
-                                .alpha(1f)
-                                .translationY(0f)
-                                .setDuration(400)
-                                .setInterpolator(DecelerateInterpolator())
-                                .start()
-
-                            // Subtle floating entrance animation for bottom player bar
-                            binding.playerBarWrapper.alpha = 0f
-                            binding.playerBarWrapper.translationY = 30f
-                            binding.playerBarWrapper.animate()
-                                .alpha(1f)
-                                .translationY(0f)
-                                .setDuration(400)
-                                .setInterpolator(DecelerateInterpolator())
-                                .start()
-                        }
+                    // Floating entrance animation for bottom player bar
+                    binding.playerBarWrapper.alpha = 0f
+                    binding.playerBarWrapper.translationY = 30f
+                    binding.playerBarWrapper.animate()
+                        .alpha(1f)
+                        .translationY(0f)
+                        .setDuration(350)
+                        .setInterpolator(DecelerateInterpolator())
                         .start()
                 }
-            })
-            start()
-        }
+                .start()
+        }, 700)
     }
 
     // =========================================================================
@@ -997,7 +960,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        loadAnimator?.cancel()
         glowAnimator?.cancel()
         progressTrackingJob?.cancel()
         mediaPlayer?.release()

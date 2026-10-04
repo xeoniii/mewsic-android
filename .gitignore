@@ -65,6 +65,7 @@ Screenshot_*
 *.jpg
 *.jpeg
 *.png
+!app/src/main/res/**/*.png
 
 # Local test runner scripts
 testapp*

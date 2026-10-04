@@ -343,65 +343,44 @@
             android:layout_gravity="center"
             android:background="@drawable/bg_ambient_glow" />
 
-        <!-- Center Branding Container -->
+        <!-- Center App Logo (Clean Instagram-Style) -->
+        <ImageView
+            android:id="@+id/ivSplashLogo"
+            android:layout_width="92dp"
+            android:layout_height="92dp"
+            android:layout_gravity="center"
+            android:contentDescription="@string/content_desc_logo"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_mewsic_logo" />
+
+        <!-- Bottom Branding: "by xeoniii.dev" like Instagram's "from Meta" -->
         <LinearLayout
-            android:id="@+id/brandingContainer"
+            android:id="@+id/layoutBottomBranding"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="center"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="40dp"
             android:gravity="center_horizontal"
             android:orientation="vertical">
 
-            <!-- Logo + Title Row -->
-            <LinearLayout
-                android:id="@+id/headerRow"
+            <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:fontFamily="sans-serif"
+                android:letterSpacing="0.08"
+                android:text="by"
+                android:textColor="#64748B"
+                android:textSize="11.5sp" />
 
-                <!-- App Icon -->
-                <ImageView
-                    android:id="@+id/ivAppIcon"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:contentDescription="@string/content_desc_logo"
-                    android:scaleType="fitCenter"
-                    android:src="@drawable/ic_mewsic_logo" />
-
-                <!-- App Title -->
-                <TextView
-                    android:id="@+id/tvAppName"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="14dp"
-                    android:fontFamily="sans-serif-black"
-                    android:letterSpacing="0.01"
-                    android:text="@string/app_name"
-                    android:textColor="@color/text_primary"
-                    android:textSize="34sp" />
-
-            </LinearLayout>
-
-            <!-- Loading Bar Track -->
-            <FrameLayout
-                android:id="@+id/loadingTrack"
-                android:layout_width="190dp"
-                android:layout_height="3.5dp"
-                android:layout_marginTop="20dp"
-                android:background="@drawable/bg_loading_track"
-                android:clipChildren="true"
-                android:clipToPadding="true">
-
-                <!-- Filling Indicator Bar (animates scaleX from 0f to 1f with midpoint hiccup) -->
-                <View
-                    android:id="@+id/loadingIndicator"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/bg_loading_indicator" />
-
-            </FrameLayout>
-
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:fontFamily="sans-serif-bold"
+                android:letterSpacing="0.08"
+                android:text="xeoniii.dev"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
         </LinearLayout>
 
     </FrameLayout>
