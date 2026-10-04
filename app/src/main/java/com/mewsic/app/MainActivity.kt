@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity() {
     private var loadAnimator: ObjectAnimator? = null
     private var glowAnimator: ObjectAnimator? = null
     private val argbEvaluator = ArgbEvaluator()
+    private var isPlaying = true
 
     private data class NavTab(
         val touchTarget: View,
@@ -64,6 +65,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupNavigation()
+        setupPlayerBar()
         startLoadingSequence()
     }
 
@@ -100,12 +102,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateIndicator(position: Int, positionOffset: Float) {
-        val totalWidth = binding.tabBarContainer.width.toFloat()
-        if (totalWidth <= 0 || navTabs.isEmpty()) return
+        val rowWidth = binding.tabIconsRow.width.toFloat()
+        if (rowWidth <= 0 || navTabs.isEmpty()) return
 
-        val tabWidth = totalWidth / navTabs.size.toFloat()
+        val tabWidth = rowWidth / navTabs.size.toFloat()
         val currentProgress = position.toFloat() + positionOffset
-        val targetCenterX = (currentProgress + 0.5f) * tabWidth
+        val targetCenterX = binding.tabIconsRow.left + (currentProgress + 0.5f) * tabWidth
 
         binding.activeIndicator.translationX = targetCenterX - (binding.activeIndicator.width / 2f)
 
@@ -139,6 +141,51 @@ class MainActivity : AppCompatActivity() {
                     .start()
             }
             .start()
+    }
+
+    private fun setupPlayerBar() {
+        // Toggle play/pause state with tactile micro-bounce
+        binding.btnPlayerPlayPause.setOnClickListener {
+            isPlaying = !isPlaying
+            binding.btnPlayerPlayPause.animate()
+                .scaleX(0.82f)
+                .scaleY(0.82f)
+                .setDuration(90)
+                .withEndAction {
+                    binding.ivPlayPauseIcon.setImageResource(
+                        if (isPlaying) R.drawable.ic_player_pause else R.drawable.ic_player_play
+                    )
+                    binding.btnPlayerPlayPause.animate()
+                        .scaleX(1.0f)
+                        .scaleY(1.0f)
+                        .setDuration(150)
+                        .setInterpolator(OvershootInterpolator(2.5f))
+                        .start()
+                }
+                .start()
+        }
+
+        binding.btnPlayerNext.setOnClickListener {
+            binding.btnPlayerNext.animate()
+                .scaleX(0.85f)
+                .scaleY(0.85f)
+                .setDuration(80)
+                .withEndAction {
+                    binding.btnPlayerNext.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start()
+                }
+                .start()
+        }
+
+        binding.btnPlayerPrev.setOnClickListener {
+            binding.btnPlayerPrev.animate()
+                .scaleX(0.85f)
+                .scaleY(0.85f)
+                .setDuration(80)
+                .withEndAction {
+                    binding.btnPlayerPrev.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start()
+                }
+                .start()
+        }
     }
 
     private fun startLoadingSequence() {
@@ -198,7 +245,7 @@ class MainActivity : AppCompatActivity() {
             duration = 1750
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
-                    // Slight hold at 100%, then fade out loading screen into blank page
+                    // Slight hold at 100%, then fade out loading screen into main screen
                     binding.loadingScreenContainer.animate()
                         .alpha(0f)
                         .setDuration(400)
@@ -212,6 +259,16 @@ class MainActivity : AppCompatActivity() {
                             binding.topBarWrapper.alpha = 0f
                             binding.topBarWrapper.translationY = -40f
                             binding.topBarWrapper.animate()
+                                .alpha(1f)
+                                .translationY(0f)
+                                .setDuration(450)
+                                .setInterpolator(DecelerateInterpolator())
+                                .start()
+
+                            // Premium floating entrance animation for bottom player bar
+                            binding.playerBarWrapper.alpha = 0f
+                            binding.playerBarWrapper.translationY = 40f
+                            binding.playerBarWrapper.animate()
                                 .alpha(1f)
                                 .translationY(0f)
                                 .setDuration(450)

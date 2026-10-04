@@ -24,21 +24,21 @@
             android:paddingStart="16dp"
             android:paddingTop="12dp"
             android:paddingEnd="16dp"
-            android:paddingBottom="8dp">
+            android:paddingBottom="6dp">
 
             <!-- Floating Pill Dock -->
             <FrameLayout
                 android:id="@+id/tabBarContainer"
                 android:layout_width="match_parent"
-                android:layout_height="64dp"
+                android:layout_height="62dp"
                 android:background="@drawable/bg_top_nav_container"
                 android:clipChildren="false">
 
                 <!-- Smooth Sliding Active Indicator Circle -->
                 <View
                     android:id="@+id/activeIndicator"
-                    android:layout_width="50dp"
-                    android:layout_height="50dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:layout_gravity="center_vertical|start"
                     android:background="@drawable/bg_indicator_circle" />
 
@@ -48,7 +48,9 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:orientation="horizontal"
+                    android:paddingStart="6dp"
+                    android:paddingEnd="6dp">
 
                     <!-- 1. Home Tab -->
                     <FrameLayout
@@ -62,8 +64,8 @@
 
                         <ImageView
                             android:id="@+id/ivTabHome"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
+                            android:layout_width="25dp"
+                            android:layout_height="25dp"
                             android:layout_gravity="center"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_tab_home" />
@@ -81,8 +83,8 @@
 
                         <ImageView
                             android:id="@+id/ivTabHarbour"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
+                            android:layout_width="25dp"
+                            android:layout_height="25dp"
                             android:layout_gravity="center"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_tab_harbour" />
@@ -100,8 +102,8 @@
 
                         <ImageView
                             android:id="@+id/ivTabLibrary"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
+                            android:layout_width="25dp"
+                            android:layout_height="25dp"
                             android:layout_gravity="center"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_tab_library" />
@@ -119,8 +121,8 @@
 
                         <ImageView
                             android:id="@+id/ivTabPlaylist"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
+                            android:layout_width="25dp"
+                            android:layout_height="25dp"
                             android:layout_gravity="center"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_tab_playlist" />
@@ -138,8 +140,8 @@
 
                         <ImageView
                             android:id="@+id/ivTabSettings"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
+                            android:layout_width="25dp"
+                            android:layout_height="25dp"
                             android:layout_gravity="center"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_tab_settings" />
@@ -155,6 +157,157 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1" />
+
+        <!-- Bottom Floating Player Bar Container -->
+        <FrameLayout
+            android:id="@+id/playerBarWrapper"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="14dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="12dp">
+
+            <!-- Floating Player Card -->
+            <FrameLayout
+                android:id="@+id/playerBarCard"
+                android:layout_width="match_parent"
+                android:layout_height="64dp"
+                android:background="@drawable/bg_player_bar"
+                android:clipToOutline="true">
+
+                <!-- Track Progress Line on Top -->
+                <FrameLayout
+                    android:id="@+id/playerProgressTrack"
+                    android:layout_width="match_parent"
+                    android:layout_height="2.5dp"
+                    android:layout_gravity="top"
+                    android:background="#1F2A30">
+
+                    <View
+                        android:id="@+id/playerProgressBar"
+                        android:layout_width="145dp"
+                        android:layout_height="match_parent"
+                        android:background="@color/tab_active_tint" />
+                </FrameLayout>
+
+                <!-- Player Content Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="12dp">
+
+                    <!-- Album Art Cover -->
+                    <ImageView
+                        android:id="@+id/ivPlayerAlbumArt"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="@drawable/bg_album_art"
+                        android:clipToOutline="true"
+                        android:scaleType="centerCrop"
+                        android:src="@drawable/ic_album_art_placeholder" />
+
+                    <!-- Song Info (Title + Artist) -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_marginEnd="8dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/tvPlayerTitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:fontFamily="sans-serif-medium"
+                            android:maxLines="1"
+                            android:text="Unravel"
+                            android:textColor="@color/text_primary"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:id="@+id/tvPlayerArtist"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:ellipsize="end"
+                            android:fontFamily="sans-serif"
+                            android:maxLines="1"
+                            android:text="TK from Ling tosite sigure"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <!-- Playback Controls -->
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <!-- Prev Button -->
+                        <FrameLayout
+                            android:id="@+id/btnPlayerPrev"
+                            android:layout_width="38dp"
+                            android:layout_height="38dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:clickable="true"
+                            android:focusable="true">
+
+                            <ImageView
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_player_prev"
+                                app:tint="@color/text_secondary" />
+                        </FrameLayout>
+
+                        <!-- Play / Pause Button -->
+                        <FrameLayout
+                            android:id="@+id/btnPlayerPlayPause"
+                            android:layout_width="44dp"
+                            android:layout_height="44dp"
+                            android:layout_marginStart="2dp"
+                            android:layout_marginEnd="2dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:clickable="true"
+                            android:focusable="true">
+
+                            <ImageView
+                                android:id="@+id/ivPlayPauseIcon"
+                                android:layout_width="28dp"
+                                android:layout_height="28dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_player_pause"
+                                app:tint="@color/tab_active_tint" />
+                        </FrameLayout>
+
+                        <!-- Next Button -->
+                        <FrameLayout
+                            android:id="@+id/btnPlayerNext"
+                            android:layout_width="38dp"
+                            android:layout_height="38dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:clickable="true"
+                            android:focusable="true">
+
+                            <ImageView
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_player_next"
+                                app:tint="@color/text_secondary" />
+                        </FrameLayout>
+
+                    </LinearLayout>
+                </LinearLayout>
+            </FrameLayout>
+        </FrameLayout>
 
     </LinearLayout>
 

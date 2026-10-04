@@ -1,0 +1,30 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="46dp"
+    android:height="46dp"
+    android:viewportWidth="46"
+    android:viewportHeight="46">
+    <path
+        android:pathData="M0,0h46v46H0z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="0"
+                android:startY="0"
+                android:endX="46"
+                android:endY="46"
+                android:type="linear">
+                <item android:color="#FF1A3626" android:offset="0.0" />
+                <item android:color="#FF0D1E16" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Vinyl subtle grooves -->
+    <path
+        android:pathData="M23,12 A11,11 0 1,0 23,34 A11,11 0 1,0 23,12"
+        android:strokeWidth="1.5"
+        android:strokeColor="#331ADA6B" />
+    <!-- Music note in center -->
+    <path
+        android:pathData="M25,17v8.5c0,1.38 -1.12,2.5 -2.5,2.5s-2.5,-1.12 -2.5,-2.5 1.12,-2.5 2.5,-2.5c0.57,0 1.08,0.19 1.5,0.51V18.5h4V17h-5.5z"
+        android:fillColor="#FF1ADA6B" />
+</vector>
