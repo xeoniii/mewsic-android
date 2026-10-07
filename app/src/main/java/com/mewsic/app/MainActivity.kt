@@ -12,6 +12,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.PorterDuff
 import android.media.MediaPlayer
@@ -23,6 +24,7 @@ import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.widget.ImageView
+import android.widget.SeekBar
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -67,12 +69,18 @@ class MainActivity : AppCompatActivity() {
     private var loadAnimator: ObjectAnimator? = null
     private val argbEvaluator = ArgbEvaluator()
 
+    enum class RepeatMode { OFF, ALL, ONE }
+
     // Audio Playback State
     private var isPlaying = false
     private var currentPlayingSong: Song? = null
     private var mediaPlayer: MediaPlayer? = null
     private var progressTrackingJob: Job? = null
     private var currentSongToken = 0L
+    private var isFullscreenPlayerOpen = false
+    private var isUserSeeking = false
+    private var isShuffle = false
+    private var repeatMode = RepeatMode.ALL
 
     // Scanned Music Datasets
     private var allSongs: List<Song> = emptyList()
@@ -200,11 +208,14 @@ class MainActivity : AppCompatActivity() {
 
         setupNavigation()
         setupPlayerBar()
+        setupFullscreenPlayer()
 
-        // Handle system back navigation (nested playlist detail -> Home tab -> background task)
+        // Handle system back navigation (fullscreen player -> nested playlist detail -> Home tab -> background task)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (binding.viewPager.currentItem == MainPagerAdapter.PAGE_PLAYLIST && pagerAdapter.isPlaylistDetailOpen()) {
+                if (isFullscreenPlayerOpen) {
+                    closeFullscreenPlayer()
+                } else if (binding.viewPager.currentItem == MainPagerAdapter.PAGE_PLAYLIST && pagerAdapter.isPlaylistDetailOpen()) {
                     pagerAdapter.closePlaylistDetail()
                     currentOpenPlaylist = null
                 } else if (binding.viewPager.currentItem != MainPagerAdapter.PAGE_HOME) {
@@ -389,7 +400,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applySongsToUI(songs: List<Song>) {
-        allSongs = songs
+        allSongs = songs.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
         recentSongs = songs.sortedByDescending { maxOf(it.dateAdded, it.dateModified) }
         val stats = MediaScanner.computeLibraryStats(songs)
 
@@ -405,13 +416,22 @@ class MainActivity : AppCompatActivity() {
         librarySongAdapter.activeSongId = song.id
         playlistSongsAdapter.activeSongId = song.id
 
-        // 1. Instantly update player bar UI (0ms delay)
+        // 1. Instantly update mini player bar UI (0ms delay)
         binding.tvPlayerTitle.text = song.title
         binding.tvPlayerArtist.text = song.artist
         ThumbnailLoader.loadThumbnail(binding.ivPlayerAlbumArt, song)
         binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_pause)
-        binding.playerProgressBar.pivotX = 0f
-        binding.playerProgressBar.scaleX = 0f
+
+        // Instantly update fullscreen player UI (0ms delay)
+        binding.tvFullTitle.text = song.title
+        binding.tvFullArtist.text = song.artist
+        ThumbnailLoader.loadThumbnail(binding.ivFullAlbumArt, song)
+        binding.ivFullPlayPause.setImageResource(R.drawable.ic_player_pause)
+        binding.fullPlayerSeekBar.max = song.durationMs.toInt()
+        binding.fullPlayerSeekBar.progress = 0
+        binding.tvFullCurrentTime.text = "0:00"
+        binding.tvFullTotalTime.text = song.durationFormatted
+        binding.tvFullPlayerContextTitle.text = currentOpenPlaylist ?: "Your Library"
 
         // 2. Prepare & play audio asynchronously without blocking the UI thread
         val token = System.currentTimeMillis().also { currentSongToken = it }
@@ -424,11 +444,18 @@ class MainActivity : AppCompatActivity() {
                     mp.start()
                     isPlaying = true
                     binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_pause)
+                    binding.ivFullPlayPause.setImageResource(R.drawable.ic_player_pause)
+                    binding.fullPlayerSeekBar.max = mp.duration
+                    binding.tvFullTotalTime.text = formatTimeMs(mp.duration.toLong())
                     startProgressTracking()
                 }
             }
             player.setOnCompletionListener {
-                playNextSong()
+                if (repeatMode == RepeatMode.ONE) {
+                    currentPlayingSong?.let { playSong(it) }
+                } else {
+                    playNextSong(fromCompletion = true)
+                }
             }
             player.prepareAsync()
         } catch (e: Exception) {
@@ -450,12 +477,14 @@ class MainActivity : AppCompatActivity() {
             player.pause()
             isPlaying = false
             binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
+            binding.ivFullPlayPause.setImageResource(R.drawable.ic_player_play)
             progressTrackingJob?.cancel()
         } else {
             if (player != null) {
                 player.start()
                 isPlaying = true
                 binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_pause)
+                binding.ivFullPlayPause.setImageResource(R.drawable.ic_player_pause)
                 startProgressTracking()
             } else {
                 currentPlayingSong?.let { playSong(it) }
@@ -463,19 +492,47 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun playNextSong() {
+    private fun playNextSong(fromCompletion: Boolean = false) {
         val list = when (binding.viewPager.currentItem) {
             MainPagerAdapter.PAGE_HOME -> recentSongs
             MainPagerAdapter.PAGE_PLAYLIST -> if (currentPlaylistSongs.isNotEmpty()) currentPlaylistSongs else allSongs
             else -> allSongs
         }
         if (list.isEmpty()) return
+
         val idx = list.indexOfFirst { it.id == currentPlayingSong?.id }
+
+        if (isShuffle && list.size > 1) {
+            var randIdx: Int
+            do {
+                randIdx = (0 until list.size).random()
+            } while (randIdx == idx)
+            playSong(list[randIdx])
+            return
+        }
+
+        if (idx == list.size - 1 && repeatMode == RepeatMode.OFF && fromCompletion) {
+            // Reached end of playback queue with repeat off
+            isPlaying = false
+            binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
+            binding.ivFullPlayPause.setImageResource(R.drawable.ic_player_play)
+            progressTrackingJob?.cancel()
+            return
+        }
+
         val nextIdx = if (idx in 0 until list.size - 1) idx + 1 else 0
         playSong(list[nextIdx])
     }
 
     private fun playPrevSong() {
+        val player = mediaPlayer
+        if (player != null && player.isPlaying && player.currentPosition > 3000) {
+            player.seekTo(0)
+            binding.fullPlayerSeekBar.progress = 0
+            binding.tvFullCurrentTime.text = "0:00"
+            return
+        }
+
         val list = when (binding.viewPager.currentItem) {
             MainPagerAdapter.PAGE_HOME -> recentSongs
             MainPagerAdapter.PAGE_PLAYLIST -> if (currentPlaylistSongs.isNotEmpty()) currentPlaylistSongs else allSongs
@@ -489,19 +546,20 @@ class MainActivity : AppCompatActivity() {
 
     private fun startProgressTracking() {
         progressTrackingJob?.cancel()
-        binding.playerProgressBar.pivotX = 0f
         progressTrackingJob = lifecycleScope.launch {
             while (isPlaying) {
                 val player = mediaPlayer
-                if (player != null && player.isPlaying) {
+                if (player != null && player.isPlaying && !isUserSeeking) {
                     val duration = player.duration
                     val current = player.currentPosition
                     if (duration > 0) {
-                        val fraction = (current.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
-                        binding.playerProgressBar.scaleX = fraction
+                        binding.fullPlayerSeekBar.max = duration
+                        binding.fullPlayerSeekBar.progress = current
+                        binding.tvFullCurrentTime.text = formatTimeMs(current.toLong())
+                        binding.tvFullTotalTime.text = formatTimeMs(duration.toLong())
                     }
                 }
-                delay(500)
+                delay(400)
             }
         }
     }
@@ -516,15 +574,16 @@ class MainActivity : AppCompatActivity() {
         }
         binding.playerBarCard.clipToOutline = true
 
-        // Progress bar initial state
-        binding.playerProgressBar.pivotX = 0f
-        binding.playerProgressBar.scaleX = 0f
-
         // Initial state when nothing is playing yet
         binding.tvPlayerTitle.text = "Nothing playing"
         binding.tvPlayerArtist.text = "Select a track to listen"
         binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
         binding.ivPlayerAlbumArt.setImageResource(R.drawable.ic_album_art_placeholder)
+
+        // Clicking anywhere on the player bar expands fullscreen player
+        binding.playerBarCard.setOnClickListener {
+            openFullscreenPlayer()
+        }
 
         // Toggle play/pause state with tactile micro-bounce
         binding.btnPlayerPlayPause.setOnClickListener {
@@ -566,6 +625,210 @@ class MainActivity : AppCompatActivity() {
                     binding.btnPlayerPrev.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
                 }
                 .start()
+        }
+    }
+
+    private fun setupFullscreenPlayer() {
+        binding.btnMinimizePlayer.setOnClickListener {
+            closeFullscreenPlayer()
+        }
+
+        binding.btnFullPlayPause.setOnClickListener {
+            binding.btnFullPlayPause.animate()
+                .scaleX(0.85f)
+                .scaleY(0.85f)
+                .setDuration(90)
+                .withEndAction {
+                    togglePlayPause()
+                    binding.btnFullPlayPause.animate()
+                        .scaleX(1.0f)
+                        .scaleY(1.0f)
+                        .setDuration(150)
+                        .setInterpolator(OvershootInterpolator(2.5f))
+                        .start()
+                }
+                .start()
+        }
+
+        binding.btnFullNext.setOnClickListener {
+            playNextSong()
+            binding.btnFullNext.animate()
+                .scaleX(0.85f)
+                .scaleY(0.85f)
+                .setDuration(70)
+                .withEndAction {
+                    binding.btnFullNext.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
+                }
+                .start()
+        }
+
+        binding.btnFullPrev.setOnClickListener {
+            playPrevSong()
+            binding.btnFullPrev.animate()
+                .scaleX(0.85f)
+                .scaleY(0.85f)
+                .setDuration(70)
+                .withEndAction {
+                    binding.btnFullPrev.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
+                }
+                .start()
+        }
+
+        binding.btnFullShuffle.setOnClickListener {
+            toggleShuffle()
+        }
+
+        binding.btnFullRepeat.setOnClickListener {
+            toggleRepeat()
+        }
+
+        binding.btnFullPlayerMore.setOnClickListener {
+            currentPlayingSong?.let { song ->
+                showSongOptions(song, inPlaylist = currentOpenPlaylist)
+            }
+        }
+
+        binding.fullPlayerSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    binding.tvFullCurrentTime.text = formatTimeMs(progress.toLong())
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                isUserSeeking = true
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                val player = mediaPlayer
+                if (player != null && seekBar != null) {
+                    player.seekTo(seekBar.progress)
+                }
+                isUserSeeking = false
+            }
+        })
+    }
+
+    private fun openFullscreenPlayer() {
+        if (isFullscreenPlayerOpen) return
+        isFullscreenPlayerOpen = true
+
+        syncFullscreenPlayerState()
+
+        val rootHeight = binding.rootContainer.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+
+        binding.fullPlayerContainer.visibility = View.VISIBLE
+        binding.fullPlayerContainer.translationY = rootHeight.toFloat()
+        binding.fullPlayerContainer.alpha = 0.6f
+
+        binding.fullPlayerContainer.animate()
+            .translationY(0f)
+            .alpha(1f)
+            .setDuration(320)
+            .setInterpolator(DecelerateInterpolator(1.4f))
+            .start()
+
+        binding.playerBarWrapper.animate()
+            .alpha(0f)
+            .scaleX(0.95f)
+            .scaleY(0.95f)
+            .setDuration(220)
+            .withEndAction {
+                binding.playerBarWrapper.visibility = View.INVISIBLE
+            }
+            .start()
+    }
+
+    private fun closeFullscreenPlayer() {
+        if (!isFullscreenPlayerOpen) return
+        isFullscreenPlayerOpen = false
+
+        binding.playerBarWrapper.visibility = View.VISIBLE
+        binding.playerBarWrapper.animate()
+            .alpha(1f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(260)
+            .start()
+
+        val rootHeight = binding.rootContainer.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+
+        binding.fullPlayerContainer.animate()
+            .translationY(rootHeight.toFloat())
+            .alpha(0.6f)
+            .setDuration(280)
+            .setInterpolator(AccelerateDecelerateInterpolator())
+            .withEndAction {
+                binding.fullPlayerContainer.visibility = View.GONE
+            }
+            .start()
+    }
+
+    private fun syncFullscreenPlayerState() {
+        val song = currentPlayingSong
+        if (song != null) {
+            binding.tvFullTitle.text = song.title
+            binding.tvFullArtist.text = song.artist
+            ThumbnailLoader.loadThumbnail(binding.ivFullAlbumArt, song)
+            val duration = mediaPlayer?.duration?.takeIf { it > 0 } ?: song.durationMs.toInt()
+            val currentPos = mediaPlayer?.currentPosition ?: 0
+
+            binding.fullPlayerSeekBar.max = duration
+            binding.fullPlayerSeekBar.progress = currentPos
+            binding.tvFullCurrentTime.text = formatTimeMs(currentPos.toLong())
+            binding.tvFullTotalTime.text = formatTimeMs(duration.toLong())
+        } else {
+            binding.tvFullTitle.text = "Nothing playing"
+            binding.tvFullArtist.text = "Select a track to listen"
+            binding.ivFullAlbumArt.setImageResource(R.drawable.ic_album_art_placeholder)
+            binding.fullPlayerSeekBar.progress = 0
+            binding.tvFullCurrentTime.text = "0:00"
+            binding.tvFullTotalTime.text = "0:00"
+        }
+
+        binding.tvFullPlayerContextTitle.text = currentOpenPlaylist ?: "Your Library"
+        binding.ivFullPlayPause.setImageResource(if (isPlaying) R.drawable.ic_player_pause else R.drawable.ic_player_play)
+        updateShuffleRepeatIcons()
+    }
+
+    private fun toggleShuffle() {
+        isShuffle = !isShuffle
+        updateShuffleRepeatIcons()
+        Toast.makeText(this, if (isShuffle) "Shuffle On" else "Shuffle Off", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun toggleRepeat() {
+        repeatMode = when (repeatMode) {
+            RepeatMode.ALL -> RepeatMode.ONE
+            RepeatMode.ONE -> RepeatMode.OFF
+            RepeatMode.OFF -> RepeatMode.ALL
+        }
+        updateShuffleRepeatIcons()
+        val msg = when (repeatMode) {
+            RepeatMode.ALL -> "Repeat All"
+            RepeatMode.ONE -> "Repeat Current Track"
+            RepeatMode.OFF -> "Repeat Off"
+        }
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateShuffleRepeatIcons() {
+        val activeColor = ContextCompat.getColor(this, R.color.brand_emerald)
+        val inactiveColor = Color.parseColor("#64748B")
+
+        binding.ivFullShuffle.setColorFilter(if (isShuffle) activeColor else inactiveColor)
+        binding.ivFullRepeat.setColorFilter(if (repeatMode != RepeatMode.OFF) activeColor else inactiveColor)
+    }
+
+    private fun formatTimeMs(ms: Long): String {
+        val totalSeconds = (ms / 1000).coerceAtLeast(0)
+        val h = totalSeconds / 3600
+        val m = (totalSeconds % 3600) / 60
+        val s = totalSeconds % 60
+        return if (h > 0) {
+            String.format("%d:%02d:%02d", h, m, s)
+        } else {
+            String.format("%d:%02d", m, s)
         }
     }
 
@@ -924,6 +1187,8 @@ class MainActivity : AppCompatActivity() {
                     currentPlayingSong = updatedSong
                     binding.tvPlayerTitle.text = newTitle
                     binding.tvPlayerArtist.text = newArtist
+                    binding.tvFullTitle.text = newTitle
+                    binding.tvFullArtist.text = newArtist
                 }
 
                 Toast.makeText(this, "Updated \"$newTitle\"", Toast.LENGTH_SHORT).show()
@@ -979,7 +1244,7 @@ class MainActivity : AppCompatActivity() {
                 binding.tvPlayerArtist.text = "Select a track to listen"
                 binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
                 binding.ivPlayerAlbumArt.setImageResource(R.drawable.ic_album_art_placeholder)
-                binding.playerProgressBar.scaleX = 0f
+                syncFullscreenPlayerState()
             }
         }
 

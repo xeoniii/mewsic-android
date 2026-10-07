@@ -14,6 +14,7 @@
     <color name="background_dark">#080C14</color>
     <color name="surface_dark">#0F172A</color>
     <color name="surface_card">#1E293B</color>
+    <color name="background_card">#16222F</color>
 
     <!-- Text & Icon Colors -->
     <color name="text_primary">#FFFFFF</color>
