@@ -52,6 +52,8 @@ import com.mewsic.app.scanner.MediaScanner
 import com.mewsic.app.scanner.PlaylistInfo
 import com.mewsic.app.scanner.PlaylistManager
 import com.mewsic.app.scanner.ThumbnailLoader
+import com.mewsic.app.service.MusicPlaybackController
+import com.mewsic.app.service.MusicPlaybackService
 import com.mewsic.app.util.UiScaleManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -153,6 +155,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Permission launcher for posting notifications on Android 13+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* Notification permission result handled automatically by system */ }
+
     private data class NavTab(
         val touchTarget: View,
         val icon: ImageView
@@ -209,6 +216,8 @@ class MainActivity : AppCompatActivity() {
         setupNavigation()
         setupPlayerBar()
         setupFullscreenPlayer()
+        setupMusicPlaybackController()
+        checkAndRequestNotificationPermission()
 
         // Handle system back navigation (fullscreen player -> nested playlist detail -> Home tab -> background task)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -372,6 +381,48 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun checkAndRequestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
+    private fun setupMusicPlaybackController() {
+        MusicPlaybackController.onPlayPause = {
+            runOnUiThread { togglePlayPause() }
+        }
+        MusicPlaybackController.onNext = {
+            runOnUiThread { playNextSong() }
+        }
+        MusicPlaybackController.onPrev = {
+            runOnUiThread { playPrevSong() }
+        }
+        MusicPlaybackController.onSeekTo = { pos ->
+            runOnUiThread {
+                mediaPlayer?.seekTo(pos.toInt())
+                binding.fullPlayerSeekBar.progress = pos.toInt()
+                binding.tvFullCurrentTime.text = formatTimeMs(pos)
+            }
+        }
+        MusicPlaybackController.onStop = {
+            runOnUiThread { stopPlayback() }
+        }
+    }
+
+    private fun stopPlayback() {
+        if (mediaPlayer == null && !isPlaying) return
+        mediaPlayer?.stop()
+        mediaPlayer?.release()
+        mediaPlayer = null
+        isPlaying = false
+        binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
+        binding.ivFullPlayPause.setImageResource(R.drawable.ic_player_play)
+        progressTrackingJob?.cancel()
+        MusicPlaybackService.stop(this)
+    }
+
     private fun onManualRescan() {
         Toast.makeText(this, "Scanning media on device...", Toast.LENGTH_SHORT).show()
         checkAndRequestAudioPermission()
@@ -433,7 +484,16 @@ class MainActivity : AppCompatActivity() {
         binding.tvFullTotalTime.text = song.durationFormatted
         binding.tvFullPlayerContextTitle.text = currentOpenPlaylist ?: "Your Library"
 
-        // 2. Prepare & play audio asynchronously without blocking the UI thread
+        // 2. Start/update persistent foreground playback notification immediately
+        MusicPlaybackService.startOrUpdate(
+            context = this,
+            song = song,
+            isPlaying = true,
+            durationMs = song.durationMs,
+            positionMs = 0L
+        )
+
+        // 3. Prepare & play audio asynchronously without blocking the UI thread
         val token = System.currentTimeMillis().also { currentSongToken = it }
         try {
             val player = mediaPlayer ?: MediaPlayer().also { mediaPlayer = it }
@@ -448,6 +508,15 @@ class MainActivity : AppCompatActivity() {
                     binding.fullPlayerSeekBar.max = mp.duration
                     binding.tvFullTotalTime.text = formatTimeMs(mp.duration.toLong())
                     startProgressTracking()
+
+                    // Refresh service with exact duration & position from player
+                    MusicPlaybackService.startOrUpdate(
+                        context = this@MainActivity,
+                        song = song,
+                        isPlaying = true,
+                        durationMs = mp.duration.toLong(),
+                        positionMs = mp.currentPosition.toLong()
+                    )
                 }
             }
             player.setOnCompletionListener {
@@ -473,12 +542,22 @@ class MainActivity : AppCompatActivity() {
         }
 
         val player = mediaPlayer
+        val song = currentPlayingSong
         if (isPlaying && player != null) {
             player.pause()
             isPlaying = false
             binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
             binding.ivFullPlayPause.setImageResource(R.drawable.ic_player_play)
             progressTrackingJob?.cancel()
+            if (song != null) {
+                MusicPlaybackService.startOrUpdate(
+                    context = this,
+                    song = song,
+                    isPlaying = false,
+                    durationMs = player.duration.toLong(),
+                    positionMs = player.currentPosition.toLong()
+                )
+            }
         } else {
             if (player != null) {
                 player.start()
@@ -486,6 +565,15 @@ class MainActivity : AppCompatActivity() {
                 binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_pause)
                 binding.ivFullPlayPause.setImageResource(R.drawable.ic_player_pause)
                 startProgressTracking()
+                if (song != null) {
+                    MusicPlaybackService.startOrUpdate(
+                        context = this,
+                        song = song,
+                        isPlaying = true,
+                        durationMs = player.duration.toLong(),
+                        positionMs = player.currentPosition.toLong()
+                    )
+                }
             } else {
                 currentPlayingSong?.let { playSong(it) }
             }
@@ -517,6 +605,15 @@ class MainActivity : AppCompatActivity() {
             binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
             binding.ivFullPlayPause.setImageResource(R.drawable.ic_player_play)
             progressTrackingJob?.cancel()
+            currentPlayingSong?.let {
+                MusicPlaybackService.startOrUpdate(
+                    context = this,
+                    song = it,
+                    isPlaying = false,
+                    durationMs = it.durationMs,
+                    positionMs = it.durationMs
+                )
+            }
             return
         }
 
@@ -530,6 +627,15 @@ class MainActivity : AppCompatActivity() {
             player.seekTo(0)
             binding.fullPlayerSeekBar.progress = 0
             binding.tvFullCurrentTime.text = "0:00"
+            currentPlayingSong?.let {
+                MusicPlaybackService.startOrUpdate(
+                    context = this,
+                    song = it,
+                    isPlaying = true,
+                    durationMs = player.duration.toLong(),
+                    positionMs = 0L
+                )
+            }
             return
         }
 
@@ -703,6 +809,15 @@ class MainActivity : AppCompatActivity() {
                 val player = mediaPlayer
                 if (player != null && seekBar != null) {
                     player.seekTo(seekBar.progress)
+                    currentPlayingSong?.let { song ->
+                        MusicPlaybackService.startOrUpdate(
+                            context = this@MainActivity,
+                            song = song,
+                            isPlaying = isPlaying,
+                            durationMs = player.duration.toLong(),
+                            positionMs = seekBar.progress.toLong()
+                        )
+                    }
                 }
                 isUserSeeking = false
             }
@@ -1245,6 +1360,7 @@ class MainActivity : AppCompatActivity() {
                 binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
                 binding.ivPlayerAlbumArt.setImageResource(R.drawable.ic_album_art_placeholder)
                 syncFullscreenPlayerState()
+                MusicPlaybackService.stop(this)
             }
         }
 
@@ -1260,8 +1376,16 @@ class MainActivity : AppCompatActivity() {
         loadAnimator?.cancel()
         glowAnimator?.cancel()
         progressTrackingJob?.cancel()
-        mediaPlayer?.release()
-        mediaPlayer = null
+        MusicPlaybackController.onPlayPause = null
+        MusicPlaybackController.onNext = null
+        MusicPlaybackController.onPrev = null
+        MusicPlaybackController.onSeekTo = null
+        MusicPlaybackController.onStop = null
+        if (!isPlaying || isFinishing) {
+            mediaPlayer?.release()
+            mediaPlayer = null
+            MusicPlaybackService.stop(this)
+        }
         super.onDestroy()
     }
 }

@@ -64,6 +64,24 @@ object ThumbnailLoader {
         }
     }
 
+    fun getCachedBitmap(songId: Long): Bitmap? = memoryCache.get(songId)
+
+    fun getFallbackBitmap(artist: String, album: String, size: Int = 192): Bitmap {
+        return generateFallbackBitmap(artist, album, size)
+    }
+
+    fun getOrLoadBitmap(context: Context, song: Song, size: Int = 192): Bitmap {
+        val cached = memoryCache.get(song.id)
+        if (cached != null) return cached
+
+        val loaded = loadBitmap(context, song)
+        if (loaded != null) {
+            memoryCache.put(song.id, loaded)
+            return loaded
+        }
+        return generateFallbackBitmap(song.artist, song.album, size)
+    }
+
     private fun loadBitmap(context: Context, song: Song): Bitmap? {
         // Method 1: API 29+ contentResolver.loadThumbnail
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
