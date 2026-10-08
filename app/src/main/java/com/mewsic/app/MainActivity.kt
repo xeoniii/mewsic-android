@@ -1041,7 +1041,6 @@ class MainActivity : AppCompatActivity() {
                     if (!isDraggingDown && !isHorizontalSwipe) {
                         if (dy > 20 && dy > Math.abs(dx) * 1.2) {
                             isDraggingDown = true
-                            binding.blankContentContainer.visibility = View.VISIBLE
                             binding.playerBarWrapper.visibility = View.VISIBLE
                         } else if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy)) {
                             isHorizontalSwipe = true
@@ -1064,7 +1063,7 @@ class MainActivity : AppCompatActivity() {
                     val dy = event.rawY - startRawY
 
                     if (isDraggingDown) {
-                        if (dy > 180) {
+                        if (dy > 160) {
                             closeFullscreenPlayer()
                         } else {
                             binding.fullPlayerContainer.animate()
@@ -1082,7 +1081,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         isDraggingDown = false
                         true
-                    } else if (isHorizontalSwipe || (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy))) {
+                    } else if (isHorizontalSwipe || (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy))) {
                         if (dx < 0) {
                             showLyricsView()
                         } else {
@@ -1106,6 +1105,9 @@ class MainActivity : AppCompatActivity() {
         binding.layoutCoverSection.setOnTouchListener(playerTouchListener)
         binding.layoutSongInfo.setOnTouchListener(playerTouchListener)
         binding.fullPlayerHeader.setOnTouchListener(playerTouchListener)
+        binding.layoutLyricsSection.setOnTouchListener(playerTouchListener)
+        binding.layoutNoLyrics.setOnTouchListener(playerTouchListener)
+        binding.layoutLyricsMiniHeader.setOnTouchListener(playerTouchListener)
         binding.layoutCardIndicators.setOnClickListener { toggleCoverOrLyrics() }
     }
 
@@ -1300,15 +1302,6 @@ class MainActivity : AppCompatActivity() {
             .alpha(1f)
             .setDuration(320)
             .setInterpolator(DecelerateInterpolator(1.4f))
-            .withEndAction {
-                // When fullscreen player is open, unrender list cover arts and hide underlying views to save bandwidth and memory
-                binding.blankContentContainer.visibility = View.INVISIBLE
-                ThumbnailLoader.pauseListLoading()
-                homeSongAdapter.areCoverArtsRendered = false
-                librarySongAdapter.areCoverArtsRendered = false
-                playlistSongsAdapter.areCoverArtsRendered = false
-                playlistAdapter.areCoverArtsRendered = false
-            }
             .start()
 
         binding.playerBarWrapper.animate()
@@ -1325,14 +1318,6 @@ class MainActivity : AppCompatActivity() {
     private fun closeFullscreenPlayer() {
         if (!isFullscreenPlayerOpen) return
         isFullscreenPlayerOpen = false
-
-        // Restore list cover arts rendering and underlying views before slide-down
-        binding.blankContentContainer.visibility = View.VISIBLE
-        ThumbnailLoader.resumeListLoading()
-        homeSongAdapter.areCoverArtsRendered = true
-        librarySongAdapter.areCoverArtsRendered = true
-        playlistSongsAdapter.areCoverArtsRendered = true
-        playlistAdapter.areCoverArtsRendered = true
 
         binding.playerBarWrapper.visibility = View.VISIBLE
         binding.playerBarWrapper.animate()
