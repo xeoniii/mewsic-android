@@ -3,9 +3,6 @@
     android:shape="oval">
     <solid android:color="#FFFFFF" />
     <size
-        android:width="14dp"
-        android:height="14dp" />
-    <stroke
-        android:width="2.5dp"
-        android:color="@color/brand_emerald" />
+        android:width="12dp"
+        android:height="12dp" />
 </shape>

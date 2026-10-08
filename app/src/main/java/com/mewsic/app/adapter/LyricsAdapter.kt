@@ -60,19 +60,19 @@ class LyricsAdapter(
             if (isActive) {
                 holder.binding.tvLyricText.setTextColor(Color.WHITE)
                 holder.binding.tvLyricText.alpha = 1.0f
-                holder.binding.tvLyricText.textSize = 21f
+                holder.binding.tvLyricText.textSize = 26f
                 holder.binding.tvLyricText.setTypeface(null, Typeface.BOLD)
             } else {
                 holder.binding.tvLyricText.setTextColor(Color.parseColor("#94A3B8"))
                 holder.binding.tvLyricText.alpha = 0.40f
-                holder.binding.tvLyricText.textSize = 17f
+                holder.binding.tvLyricText.textSize = 20f
                 holder.binding.tvLyricText.setTypeface(null, Typeface.NORMAL)
             }
         } else {
             // Unsynced plain text
             holder.binding.tvLyricText.setTextColor(Color.parseColor("#E2E8F0"))
             holder.binding.tvLyricText.alpha = 0.85f
-            holder.binding.tvLyricText.textSize = 17f
+            holder.binding.tvLyricText.textSize = 21f
             holder.binding.tvLyricText.setTypeface(null, Typeface.NORMAL)
         }
 

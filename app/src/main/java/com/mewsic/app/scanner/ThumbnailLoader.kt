@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import kotlin.math.abs
 
 object ThumbnailLoader {
@@ -35,8 +36,15 @@ object ThumbnailLoader {
         }
     }
 
-    // High resolution cache for fullscreen player and system notification (up to 1024x1024)
+    // High resolution cache for fullscreen player and system notification (up to 2560x2560)
     private val highResCache = object : LruCache<Long, Bitmap>(cacheSize / 2) {
+        override fun sizeOf(key: Long, bitmap: Bitmap): Int {
+            return bitmap.byteCount / 1024
+        }
+    }
+
+    // Fast blurred background cache for fullscreen player
+    private val blurCache = object : LruCache<Long, Bitmap>(cacheSize / 4) {
         override fun sizeOf(key: Long, bitmap: Bitmap): Int {
             return bitmap.byteCount / 1024
         }
@@ -97,7 +105,7 @@ object ThumbnailLoader {
         }
     }
 
-    fun loadHighResArt(imageView: ImageView, song: Song) {
+    fun loadHighResArt(imageView: ImageView, song: Song, blurredView: ImageView? = null) {
         val targetSongId = song.id
         imageView.tag = targetSongId
 
@@ -105,6 +113,7 @@ object ThumbnailLoader {
         val cached = highResCache.get(song.id)
         if (cached != null) {
             imageView.setImageBitmap(cached)
+            blurredView?.let { loadBlurredBackground(it, song) }
             return
         }
 
@@ -112,14 +121,15 @@ object ThumbnailLoader {
         val quickThumb = thumbCache.get(song.id)
         if (quickThumb != null) {
             imageView.setImageBitmap(quickThumb)
+            blurredView?.let { loadBlurredBackground(it, song) }
         } else {
             imageView.setImageBitmap(generateFallbackBitmap(song.artist, song.album, 512))
         }
 
-        // 3. Asynchronously decode crystal-clear high-res album art (up to 1024x1024)
+        // 3. Asynchronously decode crystal-clear full-res album art (up to 2560x2560)
         ioScope.launch {
             val highRes = withContext(Dispatchers.IO) {
-                loadHighResBitmap(imageView.context.applicationContext, song, 1024)
+                loadHighResBitmap(imageView.context.applicationContext, song, 2560)
                     ?: generateFallbackBitmap(song.artist, song.album, 1024)
             }
 
@@ -127,6 +137,7 @@ object ThumbnailLoader {
             if (imageView.tag == targetSongId) {
                 imageView.setImageBitmap(highRes)
             }
+            blurredView?.let { loadBlurredBackground(it, song) }
         }
     }
 
@@ -158,22 +169,41 @@ object ThumbnailLoader {
     }
 
     /**
-     * Decodes the highest-resolution embedded artwork directly from the media file or MediaStore
+     * Decodes original uncompressed artwork directly from the media file or MediaStore at full resolution
      */
-    fun loadHighResBitmap(context: Context, song: Song, targetSize: Int = 1024): Bitmap? {
-        // Priority 1: Direct ID3 / FLAC / MP4 embedded APIC picture (uncompressed original artwork)
-        if (song.filePath.isNotBlank()) {
+    fun loadHighResBitmap(context: Context, song: Song, targetSize: Int = 2560): Bitmap? {
+        // Priority 1: Direct FileDescriptor via MediaMetadataRetriever on contentUri (Scoped Storage safe)
+        try {
+            val mmr = MediaMetadataRetriever()
+            var opened = false
             try {
-                val mmr = MediaMetadataRetriever()
-                mmr.setDataSource(song.filePath)
+                context.contentResolver.openFileDescriptor(song.contentUri, "r")?.use { pfd ->
+                    mmr.setDataSource(pfd.fileDescriptor)
+                    opened = true
+                }
+            } catch (_: Throwable) {}
+
+            if (!opened && song.filePath.isNotBlank()) {
+                try {
+                    val file = File(song.filePath)
+                    if (file.exists() && file.canRead()) {
+                        mmr.setDataSource(file.absolutePath)
+                        opened = true
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            if (opened) {
                 val rawArt = mmr.embeddedPicture
                 mmr.release()
-                if (rawArt != null) {
+                if (rawArt != null && rawArt.isNotEmpty()) {
                     val bm = decodeSampledBitmap(rawArt, targetSize)
                     if (bm != null) return bm
                 }
-            } catch (_: Exception) {}
-        }
+            } else {
+                mmr.release()
+            }
+        } catch (_: Throwable) {}
 
         // Priority 2: MediaStore audio albumart stream
         try {
@@ -184,16 +214,50 @@ object ThumbnailLoader {
                 val bm = decodeSampledBitmap(bytes, targetSize)
                 if (bm != null) return bm
             }
-        } catch (_: Exception) {}
+        } catch (_: Throwable) {}
 
         // Priority 3: API 29+ contentResolver.loadThumbnail with high-res target Size
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 return context.contentResolver.loadThumbnail(song.contentUri, Size(targetSize, targetSize), null)
-            } catch (_: Exception) {}
+            } catch (_: Throwable) {}
         }
 
         return null
+    }
+
+    fun loadBlurredBackground(imageView: ImageView, song: Song) {
+        val targetSongId = song.id
+        imageView.tag = targetSongId
+
+        val cached = blurCache.get(song.id)
+        if (cached != null) {
+            imageView.setImageBitmap(cached)
+            return
+        }
+
+        ioScope.launch {
+            val source = highResCache.get(song.id)
+                ?: loadHighResBitmap(imageView.context.applicationContext, song, 512)
+                ?: thumbCache.get(song.id)
+                ?: generateFallbackBitmap(song.artist, song.album, 256)
+
+            val blurred = withContext(Dispatchers.Default) {
+                createBlurredBitmap(source, scale = 0.15f, radius = 22)
+            }
+
+            blurCache.put(song.id, blurred)
+            if (imageView.tag == targetSongId) {
+                imageView.setImageBitmap(blurred)
+            }
+        }
+    }
+
+    private fun createBlurredBitmap(src: Bitmap, scale: Float = 0.15f, radius: Int = 22): Bitmap {
+        val width = maxOf((src.width * scale).toInt(), 24)
+        val height = maxOf((src.height * scale).toInt(), 24)
+        val small = Bitmap.createScaledBitmap(src, width, height, true)
+        return fastStackBlur(small, radius)
     }
 
     private fun decodeSampledBitmap(data: ByteArray, targetSize: Int): Bitmap? {
@@ -220,6 +284,222 @@ object ThumbnailLoader {
         } catch (_: Throwable) {
             return null
         }
+    }
+
+    private fun fastStackBlur(sentBitmap: Bitmap, radius: Int): Bitmap {
+        val bitmap = sentBitmap.copy(sentBitmap.config ?: Bitmap.Config.ARGB_8888, true)
+        if (radius < 1) return bitmap
+
+        val w = bitmap.width
+        val h = bitmap.height
+        val pix = IntArray(w * h)
+        bitmap.getPixels(pix, 0, w, 0, 0, w, h)
+
+        val wm = w - 1
+        val hm = h - 1
+        val wh = w * h
+        val div = radius + radius + 1
+
+        val r = IntArray(wh)
+        val g = IntArray(wh)
+        val b = IntArray(wh)
+        var rsum: Int
+        var gsum: Int
+        var bsum: Int
+        var p: Int
+        var yp: Int
+        var yi: Int
+        var yw: Int
+        val vmin = IntArray(maxOf(w, h))
+
+        var divsum = (div + 1) shr 1
+        divsum *= divsum
+        val dv = IntArray(256 * divsum)
+        for (idx in 0 until 256 * divsum) {
+            dv[idx] = idx / divsum
+        }
+
+        yw = 0
+        yi = 0
+
+        val stack = Array(div) { IntArray(3) }
+        var stackpointer: Int
+        var stackstart: Int
+        var sir: IntArray
+        var rbs: Int
+        val r1 = radius + 1
+        var routsum: Int
+        var goutsum: Int
+        var boutsum: Int
+        var rinsum: Int
+        var ginsum: Int
+        var binsum: Int
+
+        for (curY in 0 until h) {
+            rinsum = 0
+            ginsum = 0
+            binsum = 0
+            routsum = 0
+            goutsum = 0
+            boutsum = 0
+            rsum = 0
+            gsum = 0
+            bsum = 0
+            for (curI in -radius..radius) {
+                p = pix[yi + minOf(wm, maxOf(curI, 0))]
+                sir = stack[curI + radius]
+                sir[0] = (p and 0xff0000) shr 16
+                sir[1] = (p and 0x00ff00) shr 8
+                sir[2] = (p and 0x0000ff)
+                rbs = r1 - abs(curI)
+                rsum += sir[0] * rbs
+                gsum += sir[1] * rbs
+                bsum += sir[2] * rbs
+                if (curI > 0) {
+                    rinsum += sir[0]
+                    ginsum += sir[1]
+                    binsum += sir[2]
+                } else {
+                    routsum += sir[0]
+                    goutsum += sir[1]
+                    boutsum += sir[2]
+                }
+            }
+            stackpointer = radius
+
+            for (curX in 0 until w) {
+                r[yi] = dv[rsum]
+                g[yi] = dv[gsum]
+                b[yi] = dv[bsum]
+
+                rsum -= routsum
+                gsum -= goutsum
+                bsum -= boutsum
+
+                stackstart = stackpointer - radius + div
+                sir = stack[stackstart % div]
+
+                routsum -= sir[0]
+                goutsum -= sir[1]
+                boutsum -= sir[2]
+
+                if (curY == 0) {
+                    vmin[curX] = minOf(curX + radius + 1, wm)
+                }
+                p = pix[yw + vmin[curX]]
+
+                sir[0] = (p and 0xff0000) shr 16
+                sir[1] = (p and 0x00ff00) shr 8
+                sir[2] = (p and 0x0000ff)
+
+                rinsum += sir[0]
+                ginsum += sir[1]
+                binsum += sir[2]
+
+                rsum += rinsum
+                gsum += ginsum
+                bsum += binsum
+
+                stackpointer = (stackpointer + 1) % div
+                sir = stack[stackpointer % div]
+
+                routsum += sir[0]
+                goutsum += sir[1]
+                boutsum += sir[2]
+
+                rinsum -= sir[0]
+                ginsum -= sir[1]
+                binsum -= sir[2]
+
+                yi++
+            }
+            yw += w
+        }
+
+        for (curX in 0 until w) {
+            rinsum = 0
+            ginsum = 0
+            binsum = 0
+            routsum = 0
+            goutsum = 0
+            boutsum = 0
+            rsum = 0
+            gsum = 0
+            bsum = 0
+            yp = -radius * w
+            for (curI in -radius..radius) {
+                yi = maxOf(0, yp) + curX
+                sir = stack[curI + radius]
+                sir[0] = r[yi]
+                sir[1] = g[yi]
+                sir[2] = b[yi]
+                rbs = r1 - abs(curI)
+                rsum += r[yi] * rbs
+                gsum += g[yi] * rbs
+                bsum += b[yi] * rbs
+                if (curI > 0) {
+                    rinsum += sir[0]
+                    ginsum += sir[1]
+                    binsum += sir[2]
+                } else {
+                    routsum += sir[0]
+                    goutsum += sir[1]
+                    boutsum += sir[2]
+                }
+                if (curI < hm) {
+                    yp += w
+                }
+            }
+            yi = curX
+            stackpointer = radius
+            for (curY in 0 until h) {
+                pix[yi] = (0xff000000.toInt()) or (dv[rsum] shl 16) or (dv[gsum] shl 8) or dv[bsum]
+
+                rsum -= routsum
+                gsum -= goutsum
+                bsum -= boutsum
+
+                stackstart = stackpointer - radius + div
+                sir = stack[stackstart % div]
+
+                routsum -= sir[0]
+                goutsum -= sir[1]
+                boutsum -= sir[2]
+
+                if (curX == 0) {
+                    vmin[curY] = minOf(curY + r1, hm) * w
+                }
+                p = curX + vmin[curY]
+
+                sir[0] = r[p]
+                sir[1] = g[p]
+                sir[2] = b[p]
+
+                rinsum += sir[0]
+                ginsum += sir[1]
+                binsum += sir[2]
+
+                rsum += rinsum
+                gsum += ginsum
+                bsum += binsum
+
+                stackpointer = (stackpointer + 1) % div
+                sir = stack[stackpointer]
+
+                routsum += sir[0]
+                goutsum += sir[1]
+                boutsum += sir[2]
+
+                rinsum -= sir[0]
+                ginsum -= sir[1]
+                binsum -= sir[2]
+
+                yi += w
+            }
+        }
+
+        bitmap.setPixels(pix, 0, w, 0, 0, w, h)
+        return bitmap
     }
 
     private fun loadBitmap(context: Context, song: Song): Bitmap? {

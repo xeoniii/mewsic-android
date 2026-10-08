@@ -511,7 +511,7 @@ class MainActivity : AppCompatActivity() {
         binding.tvFullTitle.text = song.title
         binding.tvFullArtist.text = song.artist
         if (isFullscreenPlayerOpen) {
-            ThumbnailLoader.loadHighResArt(binding.ivFullAlbumArt, song)
+            ThumbnailLoader.loadHighResArt(binding.ivFullAlbumArt, song, binding.ivFullPlayerBlurredBg)
         }
         if (isShowingLyrics) {
             loadLyricsForCurrentSong()
@@ -846,6 +846,30 @@ class MainActivity : AppCompatActivity() {
                 .start()
         }
 
+        binding.btnFullRewind5.setOnClickListener {
+            seekRelative(-5000L)
+            binding.btnFullRewind5.animate()
+                .scaleX(0.85f)
+                .scaleY(0.85f)
+                .setDuration(70)
+                .withEndAction {
+                    binding.btnFullRewind5.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
+                }
+                .start()
+        }
+
+        binding.btnFullForward5.setOnClickListener {
+            seekRelative(5000L)
+            binding.btnFullForward5.animate()
+                .scaleX(0.85f)
+                .scaleY(0.85f)
+                .setDuration(70)
+                .withEndAction {
+                    binding.btnFullForward5.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
+                }
+                .start()
+        }
+
         binding.btnFullShuffle.setOnClickListener {
             toggleShuffle()
         }
@@ -991,6 +1015,26 @@ class MainActivity : AppCompatActivity() {
         binding.ivFullAlbumArt.setOnTouchListener(cardTouchListener)
         binding.layoutCoverSection.setOnTouchListener(cardTouchListener)
         binding.layoutCardIndicators.setOnClickListener { toggleCoverOrLyrics() }
+    }
+
+    private fun seekRelative(deltaMs: Long) {
+        val player = mediaPlayer ?: return
+        val currentPos = player.currentPosition
+        val duration = player.duration
+        val targetPos = (currentPos + deltaMs).coerceIn(0L, duration.toLong()).toInt()
+        player.seekTo(targetPos)
+        binding.fullPlayerSeekBar.progress = targetPos
+        binding.tvFullCurrentTime.text = formatTimeMs(targetPos.toLong())
+        currentPlayingSong?.let { song ->
+            MusicPlaybackService.startOrUpdate(
+                context = this,
+                song = song,
+                isPlaying = isPlaying,
+                durationMs = duration.toLong(),
+                positionMs = targetPos.toLong()
+            )
+        }
+        window.decorView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
     }
 
     private fun showLyricsView(animate: Boolean = true) {
@@ -1226,6 +1270,7 @@ class MainActivity : AppCompatActivity() {
             .withEndAction {
                 binding.fullPlayerContainer.visibility = View.GONE
                 binding.ivFullAlbumArt.setImageDrawable(null)
+                binding.ivFullPlayerBlurredBg.setImageDrawable(null)
                 showCoverArtView(animate = false)
             }
             .start()
@@ -1236,7 +1281,7 @@ class MainActivity : AppCompatActivity() {
         if (song != null) {
             binding.tvFullTitle.text = song.title
             binding.tvFullArtist.text = song.artist
-            ThumbnailLoader.loadHighResArt(binding.ivFullAlbumArt, song)
+            ThumbnailLoader.loadHighResArt(binding.ivFullAlbumArt, song, binding.ivFullPlayerBlurredBg)
             if (isShowingLyrics) {
                 loadLyricsForCurrentSong()
             } else {
@@ -1253,6 +1298,7 @@ class MainActivity : AppCompatActivity() {
             binding.tvFullTitle.text = "Nothing playing"
             binding.tvFullArtist.text = "Select a track to listen"
             binding.ivFullAlbumArt.setImageResource(R.drawable.ic_album_art_placeholder)
+            binding.ivFullPlayerBlurredBg.setImageDrawable(null)
             showCoverArtView(animate = false)
             binding.fullPlayerSeekBar.progress = 0
             binding.tvFullCurrentTime.text = "0:00"

@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:id="@android:id/background">
+    <item
+        android:id="@android:id/background"
+        android:gravity="center_vertical">
         <shape android:shape="rectangle">
             <corners android:radius="3dp" />
-            <solid android:color="#243447" />
-            <size android:height="4dp" />
+            <solid android:color="#33FFFFFF" />
+            <size android:height="4.5dp" />
         </shape>
     </item>
-    <item android:id="@android:id/progress">
+    <item
+        android:id="@android:id/progress"
+        android:gravity="center_vertical">
         <scale android:scaleWidth="100%">
             <shape android:shape="rectangle">
                 <corners android:radius="3dp" />
@@ -15,7 +19,7 @@
                     android:angle="0"
                     android:endColor="@color/brand_emerald_bright"
                     android:startColor="@color/brand_emerald" />
-                <size android:height="4dp" />
+                <size android:height="4.5dp" />
             </shape>
         </scale>
     </item>
