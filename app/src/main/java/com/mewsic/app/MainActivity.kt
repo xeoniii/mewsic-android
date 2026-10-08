@@ -55,6 +55,10 @@ import com.mewsic.app.scanner.ThumbnailLoader
 import com.mewsic.app.service.MusicPlaybackController
 import com.mewsic.app.service.MusicPlaybackService
 import com.mewsic.app.util.UiScaleManager
+import android.annotation.SuppressLint
+import android.view.GestureDetector
+import android.view.MotionEvent
+import com.mewsic.app.scanner.LyricsExtractor
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -83,6 +87,8 @@ class MainActivity : AppCompatActivity() {
     private var isUserSeeking = false
     private var isShuffle = false
     private var repeatMode = RepeatMode.ALL
+    private var isShowingLyrics = false
+    private var lyricsJob: Job? = null
 
     // Scanned Music Datasets
     private var allSongs: List<Song> = emptyList()
@@ -479,6 +485,9 @@ class MainActivity : AppCompatActivity() {
         if (isFullscreenPlayerOpen) {
             ThumbnailLoader.loadHighResArt(binding.ivFullAlbumArt, song)
         }
+        if (isShowingLyrics) {
+            loadLyricsForCurrentSong()
+        }
         binding.ivFullPlayPause.setImageResource(R.drawable.ic_player_pause)
         binding.fullPlayerSeekBar.max = song.durationMs.toInt()
         binding.fullPlayerSeekBar.progress = 0
@@ -824,6 +833,231 @@ class MainActivity : AppCompatActivity() {
                 isUserSeeking = false
             }
         })
+
+        setupCardSwipeGesture()
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupCardSwipeGesture() {
+        val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            private val SWIPE_THRESHOLD = 50
+            private val SWIPE_VELOCITY_THRESHOLD = 80
+
+            override fun onFling(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                if (e1 == null) return false
+                val diffX = e2.x - e1.x
+                val diffY = e2.y - e1.y
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                        if (diffX < 0) {
+                            showLyricsView()
+                        } else {
+                            showCoverArtView()
+                        }
+                        return true
+                    }
+                }
+                return false
+            }
+
+            override fun onDown(e: MotionEvent): Boolean = true
+        })
+
+        var startX = 0f
+        var startY = 0f
+
+        val cardTouchListener = View.OnTouchListener { _, event ->
+            gestureDetector.onTouchEvent(event)
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = event.x
+                    startY = event.y
+                }
+                MotionEvent.ACTION_UP -> {
+                    val totalDx = event.x - startX
+                    val totalDy = event.y - startY
+                    if (Math.abs(totalDx) > Math.abs(totalDy) && Math.abs(totalDx) > 80) {
+                        if (totalDx < 0) {
+                            showLyricsView()
+                        } else {
+                            showCoverArtView()
+                        }
+                    }
+                }
+            }
+            true
+        }
+
+        binding.cardFullAlbumArt.setOnTouchListener(cardTouchListener)
+        binding.ivFullAlbumArt.setOnTouchListener(cardTouchListener)
+
+        var lyricsStartX = 0f
+        var lyricsStartY = 0f
+        binding.lyricsScrollView.setOnTouchListener { v, event ->
+            gestureDetector.onTouchEvent(event)
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    lyricsStartX = event.x
+                    lyricsStartY = event.y
+                    v.parent.requestDisallowInterceptTouchEvent(true)
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = Math.abs(event.x - lyricsStartX)
+                    val dy = Math.abs(event.y - lyricsStartY)
+                    if (dx > dy && dx > 40) {
+                        v.parent.requestDisallowInterceptTouchEvent(false)
+                    } else {
+                        v.parent.requestDisallowInterceptTouchEvent(true)
+                    }
+                }
+                MotionEvent.ACTION_UP -> {
+                    val totalDx = event.x - lyricsStartX
+                    val totalDy = event.y - lyricsStartY
+                    if (Math.abs(totalDx) > Math.abs(totalDy) && totalDx > 80) {
+                        showCoverArtView()
+                    }
+                }
+            }
+            false
+        }
+
+        binding.btnBackToCover.setOnClickListener { showCoverArtView() }
+        binding.layoutCardIndicators.setOnClickListener { toggleCoverOrLyrics() }
+    }
+
+    private fun showLyricsView(animate: Boolean = true) {
+        if (isShowingLyrics) return
+        isShowingLyrics = true
+        updateCardIndicators()
+        loadLyricsForCurrentSong()
+
+        val cardWidth = binding.cardFullAlbumArt.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+
+        if (!animate) {
+            binding.ivFullAlbumArt.visibility = View.GONE
+            binding.ivFullAlbumArt.translationX = 0f
+            binding.ivFullAlbumArt.alpha = 1f
+            binding.layoutLyrics.visibility = View.VISIBLE
+            binding.layoutLyrics.translationX = 0f
+            binding.layoutLyrics.alpha = 1f
+            return
+        }
+
+        binding.layoutLyrics.visibility = View.VISIBLE
+        binding.layoutLyrics.translationX = cardWidth.toFloat()
+        binding.layoutLyrics.alpha = 0f
+
+        binding.ivFullAlbumArt.animate()
+            .translationX(-cardWidth * 0.4f)
+            .alpha(0f)
+            .setDuration(280)
+            .setInterpolator(DecelerateInterpolator(1.4f))
+            .withEndAction {
+                binding.ivFullAlbumArt.visibility = View.GONE
+            }
+            .start()
+
+        binding.layoutLyrics.animate()
+            .translationX(0f)
+            .alpha(1f)
+            .setDuration(280)
+            .setInterpolator(DecelerateInterpolator(1.4f))
+            .start()
+    }
+
+    private fun showCoverArtView(animate: Boolean = true) {
+        if (!isShowingLyrics && binding.ivFullAlbumArt.visibility == View.VISIBLE) return
+        isShowingLyrics = false
+        updateCardIndicators()
+
+        val cardWidth = binding.cardFullAlbumArt.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+
+        if (!animate) {
+            binding.layoutLyrics.visibility = View.GONE
+            binding.layoutLyrics.translationX = 0f
+            binding.layoutLyrics.alpha = 1f
+            binding.ivFullAlbumArt.visibility = View.VISIBLE
+            binding.ivFullAlbumArt.translationX = 0f
+            binding.ivFullAlbumArt.alpha = 1f
+            return
+        }
+
+        binding.ivFullAlbumArt.visibility = View.VISIBLE
+        binding.ivFullAlbumArt.translationX = -cardWidth.toFloat()
+        binding.ivFullAlbumArt.alpha = 0f
+
+        binding.layoutLyrics.animate()
+            .translationX(cardWidth * 0.4f)
+            .alpha(0f)
+            .setDuration(280)
+            .setInterpolator(DecelerateInterpolator(1.4f))
+            .withEndAction {
+                binding.layoutLyrics.visibility = View.GONE
+            }
+            .start()
+
+        binding.ivFullAlbumArt.animate()
+            .translationX(0f)
+            .alpha(1f)
+            .setDuration(280)
+            .setInterpolator(DecelerateInterpolator(1.4f))
+            .start()
+    }
+
+    private fun toggleCoverOrLyrics() {
+        if (isShowingLyrics) {
+            showCoverArtView()
+        } else {
+            showLyricsView()
+        }
+    }
+
+    private fun updateCardIndicators() {
+        val density = resources.displayMetrics.density
+        val activeWidth = (16 * density).toInt()
+        val inactiveWidth = (6 * density).toInt()
+
+        if (isShowingLyrics) {
+            binding.indicatorDotCover.layoutParams = binding.indicatorDotCover.layoutParams.apply { width = inactiveWidth }
+            binding.indicatorDotCover.setBackgroundResource(R.drawable.bg_indicator_dot_inactive)
+
+            binding.indicatorDotLyrics.layoutParams = binding.indicatorDotLyrics.layoutParams.apply { width = activeWidth }
+            binding.indicatorDotLyrics.setBackgroundResource(R.drawable.bg_indicator_dot_active)
+        } else {
+            binding.indicatorDotCover.layoutParams = binding.indicatorDotCover.layoutParams.apply { width = activeWidth }
+            binding.indicatorDotCover.setBackgroundResource(R.drawable.bg_indicator_dot_active)
+
+            binding.indicatorDotLyrics.layoutParams = binding.indicatorDotLyrics.layoutParams.apply { width = inactiveWidth }
+            binding.indicatorDotLyrics.setBackgroundResource(R.drawable.bg_indicator_dot_inactive)
+        }
+    }
+
+    private fun loadLyricsForCurrentSong() {
+        val song = currentPlayingSong ?: return
+        lyricsJob?.cancel()
+        lyricsJob = lifecycleScope.launch {
+            binding.tvLyricsContent.text = "Loading lyrics..."
+            binding.tvLyricsContent.visibility = View.VISIBLE
+            binding.layoutNoLyrics.visibility = View.GONE
+            binding.lyricsScrollView.scrollTo(0, 0)
+
+            val lyrics = LyricsExtractor.getLyrics(this@MainActivity, song)
+            if (currentPlayingSong?.id == song.id) {
+                if (!lyrics.isNullOrBlank()) {
+                    binding.tvLyricsContent.text = lyrics
+                    binding.tvLyricsContent.visibility = View.VISIBLE
+                    binding.layoutNoLyrics.visibility = View.GONE
+                } else {
+                    binding.tvLyricsContent.visibility = View.GONE
+                    binding.layoutNoLyrics.visibility = View.VISIBLE
+                }
+            }
+        }
     }
 
     private fun openFullscreenPlayer() {
@@ -895,6 +1129,7 @@ class MainActivity : AppCompatActivity() {
             .withEndAction {
                 binding.fullPlayerContainer.visibility = View.GONE
                 binding.ivFullAlbumArt.setImageDrawable(null)
+                showCoverArtView(animate = false)
             }
             .start()
     }
@@ -905,6 +1140,11 @@ class MainActivity : AppCompatActivity() {
             binding.tvFullTitle.text = song.title
             binding.tvFullArtist.text = song.artist
             ThumbnailLoader.loadHighResArt(binding.ivFullAlbumArt, song)
+            if (isShowingLyrics) {
+                loadLyricsForCurrentSong()
+            } else {
+                showCoverArtView(animate = false)
+            }
             val duration = mediaPlayer?.duration?.takeIf { it > 0 } ?: song.durationMs.toInt()
             val currentPos = mediaPlayer?.currentPosition ?: 0
 
@@ -916,6 +1156,7 @@ class MainActivity : AppCompatActivity() {
             binding.tvFullTitle.text = "Nothing playing"
             binding.tvFullArtist.text = "Select a track to listen"
             binding.ivFullAlbumArt.setImageResource(R.drawable.ic_album_art_placeholder)
+            showCoverArtView(animate = false)
             binding.fullPlayerSeekBar.progress = 0
             binding.tvFullCurrentTime.text = "0:00"
             binding.tvFullTotalTime.text = "0:00"
@@ -1396,6 +1637,7 @@ class MainActivity : AppCompatActivity() {
         loadAnimator?.cancel()
         glowAnimator?.cancel()
         progressTrackingJob?.cancel()
+        lyricsJob?.cancel()
         MusicPlaybackController.onPlayPause = null
         MusicPlaybackController.onNext = null
         MusicPlaybackController.onPrev = null

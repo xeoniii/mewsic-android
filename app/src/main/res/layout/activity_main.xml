@@ -428,27 +428,185 @@
             android:layout_marginStart="36dp"
             android:layout_marginTop="8dp"
             android:layout_marginEnd="36dp"
-            android:layout_marginBottom="24dp"
+            android:layout_marginBottom="10dp"
             app:cardBackgroundColor="@color/background_card"
             app:cardCornerRadius="30dp"
             app:cardElevation="10dp"
             app:cardPreventCornerOverlap="true"
             app:strokeColor="#1E2A38"
             app:strokeWidth="1dp"
-            app:layout_constraintBottom_toTopOf="@+id/layoutSongInfo"
+            app:layout_constraintBottom_toTopOf="@+id/layoutCardIndicators"
             app:layout_constraintDimensionRatio="1:1"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/fullPlayerHeader"
             app:layout_constraintVertical_bias="0.4">
 
-            <ImageView
-                android:id="@+id/ivFullAlbumArt"
+            <FrameLayout
+                android:id="@+id/cardContainer"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:scaleType="centerCrop"
-                android:src="@drawable/ic_album_art_placeholder" />
+                android:layout_height="match_parent">
+
+                <!-- 1. Cover Art View -->
+                <ImageView
+                    android:id="@+id/ivFullAlbumArt"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/ic_album_art_placeholder" />
+
+                <!-- 2. Lyrics View (Overlaid, initially gone) -->
+                <FrameLayout
+                    android:id="@+id/layoutLyrics"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_lyrics_card"
+                    android:visibility="gone">
+
+                    <!-- Top Lyrics Header Bar -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="20dp"
+                        android:paddingTop="16dp"
+                        android:paddingEnd="20dp"
+                        android:paddingBottom="8dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:fontFamily="sans-serif-black"
+                            android:letterSpacing="0.1"
+                            android:text="LYRICS"
+                            android:textColor="@color/brand_emerald"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/btnBackToCover"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:fontFamily="sans-serif-medium"
+                            android:padding="4dp"
+                            android:text="Cover ✕"
+                            android:textColor="#94A3B8"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <!-- Scrollable Lyrics Container -->
+                    <androidx.core.widget.NestedScrollView
+                        android:id="@+id/lyricsScrollView"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:layout_marginTop="44dp"
+                        android:layout_marginBottom="8dp"
+                        android:clipToPadding="false"
+                        android:fillViewport="true"
+                        android:overScrollMode="never"
+                        android:paddingStart="20dp"
+                        android:paddingEnd="20dp"
+                        android:paddingBottom="24dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_horizontal"
+                            android:orientation="vertical">
+
+                            <!-- Actual Lyrics Text -->
+                            <TextView
+                                android:id="@+id/tvLyricsContent"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:lineSpacingExtra="8dp"
+                                android:textAlignment="center"
+                                android:textColor="#F1F5F9"
+                                android:textSize="15.5sp"
+                                android:visibility="visible" />
+
+                            <!-- Empty State if No Lyrics Found -->
+                            <LinearLayout
+                                android:id="@+id/layoutNoLyrics"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:gravity="center"
+                                android:orientation="vertical"
+                                android:paddingTop="48dp"
+                                android:paddingBottom="48dp"
+                                android:visibility="gone">
+
+                                <ImageView
+                                    android:layout_width="44dp"
+                                    android:layout_height="44dp"
+                                    android:alpha="0.4"
+                                    android:src="@drawable/ic_tab_harbour"
+                                    app:tint="@color/text_secondary" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="14dp"
+                                    android:fontFamily="sans-serif-bold"
+                                    android:text="No Lyrics Found"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="15sp" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="4dp"
+                                    android:fontFamily="sans-serif"
+                                    android:text="No lyrics embedded in this file"
+                                    android:textColor="@color/text_secondary"
+                                    android:textSize="12sp" />
+                            </LinearLayout>
+
+                        </LinearLayout>
+                    </androidx.core.widget.NestedScrollView>
+
+                </FrameLayout>
+            </FrameLayout>
         </com.google.android.material.card.MaterialCardView>
+
+        <!-- Card Page Indicator (Cover Art / Lyrics) -->
+        <LinearLayout
+            android:id="@+id/layoutCardIndicators"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:padding="6dp"
+            app:layout_constraintBottom_toTopOf="@+id/layoutSongInfo"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/cardFullAlbumArt">
+
+            <!-- Dot 1: Cover -->
+            <View
+                android:id="@+id/indicatorDotCover"
+                android:layout_width="16dp"
+                android:layout_height="4dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_indicator_dot_active" />
+
+            <!-- Dot 2: Lyrics -->
+            <View
+                android:id="@+id/indicatorDotLyrics"
+                android:layout_width="6dp"
+                android:layout_height="4dp"
+                android:background="@drawable/bg_indicator_dot_inactive" />
+
+        </LinearLayout>
 
         <!-- 3. Song Info (Title & Artist) -->
         <LinearLayout
