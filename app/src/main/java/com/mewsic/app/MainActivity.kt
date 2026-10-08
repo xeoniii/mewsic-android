@@ -753,7 +753,101 @@ class MainActivity : AppCompatActivity() {
         binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
         binding.ivPlayerAlbumArt.setImageResource(R.drawable.ic_album_art_placeholder)
 
-        // Clicking anywhere on the player bar expands fullscreen player
+        // Swipe up or tap anywhere on player bar to expand fullscreen player
+        var playerBarTouchStartY = 0f
+        var playerBarTouchStartX = 0f
+        var isPlayerBarSwipingUp = false
+
+        val playerBarGestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onFling(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                if (e1 == null) return false
+                val diffY = e2.y - e1.y
+                val diffX = e2.x - e1.x
+                if (diffY < -40 && Math.abs(velocityY) > 80 && Math.abs(diffY) > Math.abs(diffX)) {
+                    openFullscreenPlayer()
+                    return true
+                }
+                return false
+            }
+
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                openFullscreenPlayer()
+                return true
+            }
+
+            override fun onDown(e: MotionEvent): Boolean = true
+        })
+
+        val playerBarTouchListener = View.OnTouchListener { _, event ->
+            playerBarGestureDetector.onTouchEvent(event)
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    playerBarTouchStartY = event.rawY
+                    playerBarTouchStartX = event.rawX
+                    isPlayerBarSwipingUp = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dy = event.rawY - playerBarTouchStartY
+                    val dx = event.rawX - playerBarTouchStartX
+                    if (!isPlayerBarSwipingUp && dy < -20 && Math.abs(dy) > Math.abs(dx) * 1.2) {
+                        isPlayerBarSwipingUp = true
+                        syncFullscreenPlayerState()
+                        binding.fullPlayerContainer.visibility = View.VISIBLE
+                    }
+                    if (isPlayerBarSwipingUp) {
+                        val screenHeight = binding.rootContainer.height.takeIf { it > 0 }?.toFloat()
+                            ?: resources.displayMetrics.heightPixels.toFloat()
+                        val currentY = maxOf(0f, screenHeight + dy)
+                        binding.fullPlayerContainer.translationY = currentY
+                        val progress = 1f - (currentY / screenHeight).coerceIn(0f, 1f)
+                        binding.playerBarWrapper.alpha = (1f - progress).coerceIn(0f, 1f)
+                        true
+                    } else {
+                        false
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    val dy = event.rawY - playerBarTouchStartY
+                    val dx = event.rawX - playerBarTouchStartX
+                    if (isPlayerBarSwipingUp) {
+                        if (dy < -80) {
+                            openFullscreenPlayer()
+                        } else {
+                            val screenHeight = binding.rootContainer.height.takeIf { it > 0 }?.toFloat()
+                                ?: resources.displayMetrics.heightPixels.toFloat()
+                            binding.fullPlayerContainer.animate()
+                                .translationY(screenHeight)
+                                .setDuration(220)
+                                .withEndAction {
+                                    binding.fullPlayerContainer.visibility = View.GONE
+                                }
+                                .start()
+                            binding.playerBarWrapper.animate()
+                                .alpha(1f)
+                                .setDuration(200)
+                                .start()
+                        }
+                        isPlayerBarSwipingUp = false
+                        true
+                    } else if (Math.abs(dy) < 25 && Math.abs(dx) < 25) {
+                        openFullscreenPlayer()
+                        true
+                    } else {
+                        false
+                    }
+                }
+                else -> false
+            }
+        }
+
+        binding.playerBarCard.setOnTouchListener(playerBarTouchListener)
+        binding.playerBarWrapper.setOnTouchListener(playerBarTouchListener)
         binding.playerBarCard.setOnClickListener {
             openFullscreenPlayer()
         }
@@ -1095,16 +1189,6 @@ class MainActivity : AppCompatActivity() {
                         closeFullscreenPlayer()
                         true
                     } else {
-                        if (!isShowingLyrics && Math.abs(dx) < 25 && Math.abs(dy) < 25) {
-                            val hintLocation = IntArray(2)
-                            binding.tvLyricsHint.getLocationOnScreen(hintLocation)
-                            val hintTop = hintLocation[1] - 40
-                            val hintBottom = hintLocation[1] + binding.tvLyricsHint.height + 40
-                            if (event.rawY >= hintTop && event.rawY <= hintBottom) {
-                                showLyricsView()
-                                return@OnTouchListener true
-                            }
-                        }
                         false
                     }
                 }
@@ -1120,30 +1204,7 @@ class MainActivity : AppCompatActivity() {
         binding.layoutLyricsSection.setOnTouchListener(playerTouchListener)
         binding.layoutNoLyrics.setOnTouchListener(playerTouchListener)
         binding.layoutLyricsMiniHeader.setOnTouchListener(playerTouchListener)
-
-        binding.tvLyricsHint.setOnClickListener {
-            showLyricsView()
-        }
-
-        binding.tvLyricsHint.setOnTouchListener { v, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    v.animate().scaleX(0.95f).scaleY(0.95f).setDuration(80).start()
-                    true
-                }
-                MotionEvent.ACTION_UP -> {
-                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start()
-                    showLyricsView()
-                    v.performClick()
-                    true
-                }
-                MotionEvent.ACTION_CANCEL -> {
-                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start()
-                    true
-                }
-                else -> false
-            }
-        }
+        binding.tvLyricsHint.setOnTouchListener(playerTouchListener)
     }
 
     private fun seekRelative(deltaMs: Long) {
@@ -1327,7 +1388,9 @@ class MainActivity : AppCompatActivity() {
             ?: resources.displayMetrics.heightPixels.toFloat()
 
         binding.fullPlayerContainer.visibility = View.VISIBLE
-        binding.fullPlayerContainer.translationY = slideDistance
+        if (binding.fullPlayerContainer.translationY <= 0f || binding.fullPlayerContainer.translationY >= slideDistance) {
+            binding.fullPlayerContainer.translationY = slideDistance
+        }
         binding.fullPlayerContainer.alpha = 1f
 
         binding.fullPlayerContainer.animate()
