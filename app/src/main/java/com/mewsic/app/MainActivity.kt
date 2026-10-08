@@ -824,48 +824,48 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnFullNext.setOnClickListener {
             playNextSong()
-            binding.btnFullNext.animate()
-                .scaleX(0.85f)
-                .scaleY(0.85f)
+            binding.ivFullNext.animate()
+                .scaleX(0.82f)
+                .scaleY(0.82f)
                 .setDuration(70)
                 .withEndAction {
-                    binding.btnFullNext.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
+                    binding.ivFullNext.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
                 }
                 .start()
         }
 
         binding.btnFullPrev.setOnClickListener {
             playPrevSong()
-            binding.btnFullPrev.animate()
-                .scaleX(0.85f)
-                .scaleY(0.85f)
+            binding.ivFullPrev.animate()
+                .scaleX(0.82f)
+                .scaleY(0.82f)
                 .setDuration(70)
                 .withEndAction {
-                    binding.btnFullPrev.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
+                    binding.ivFullPrev.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
                 }
                 .start()
         }
 
-        binding.btnFullRewind5.setOnClickListener {
+        binding.btnFullRewind.setOnClickListener {
             seekRelative(-5000L)
-            binding.btnFullRewind5.animate()
-                .scaleX(0.85f)
-                .scaleY(0.85f)
+            binding.ivFullRewind.animate()
+                .scaleX(0.82f)
+                .scaleY(0.82f)
                 .setDuration(70)
                 .withEndAction {
-                    binding.btnFullRewind5.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
+                    binding.ivFullRewind.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
                 }
                 .start()
         }
 
-        binding.btnFullForward5.setOnClickListener {
+        binding.btnFullForward.setOnClickListener {
             seekRelative(5000L)
-            binding.btnFullForward5.animate()
-                .scaleX(0.85f)
-                .scaleY(0.85f)
+            binding.ivFullForward.animate()
+                .scaleX(0.82f)
+                .scaleY(0.82f)
                 .setDuration(70)
                 .withEndAction {
-                    binding.btnFullForward5.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
+                    binding.ivFullForward.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
                 }
                 .start()
         }
@@ -937,9 +937,14 @@ class MainActivity : AppCompatActivity() {
                     }
                     MotionEvent.ACTION_MOVE -> {
                         val dx = e.x - lyricsTouchStartX
-                        val dy = Math.abs(e.y - lyricsTouchStartY)
-                        if (dx > 90 && dx > dy * 1.5) {
+                        val dy = e.y - lyricsTouchStartY
+                        if (dx > 90 && dx > Math.abs(dy) * 1.5) {
                             showCoverArtView()
+                            return true
+                        }
+                        // Swipe down at the top of lyrics -> close player
+                        if (dy > 90 && dy > Math.abs(dx) * 1.5 && !rv.canScrollVertically(-1)) {
+                            closeFullscreenPlayer()
                             return true
                         }
                     }
@@ -947,10 +952,6 @@ class MainActivity : AppCompatActivity() {
                 return false
             }
         })
-
-        binding.btnFullLyricsToggle.setOnClickListener {
-            toggleCoverOrLyrics()
-        }
 
         setupCardSwipeGesture()
     }
@@ -979,6 +980,12 @@ class MainActivity : AppCompatActivity() {
                         }
                         return true
                     }
+                } else {
+                    // Swipe down gesture to dismiss/close player
+                    if (diffY > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
+                        closeFullscreenPlayer()
+                        return true
+                    }
                 }
                 return false
             }
@@ -1005,6 +1012,8 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             showCoverArtView()
                         }
+                    } else if (totalDy > 80 && totalDy > Math.abs(totalDx) * 1.2) {
+                        closeFullscreenPlayer()
                     }
                 }
             }
@@ -1014,7 +1023,32 @@ class MainActivity : AppCompatActivity() {
         binding.cardFullAlbumArt.setOnTouchListener(cardTouchListener)
         binding.ivFullAlbumArt.setOnTouchListener(cardTouchListener)
         binding.layoutCoverSection.setOnTouchListener(cardTouchListener)
+        binding.layoutSongInfo.setOnTouchListener(cardTouchListener)
         binding.layoutCardIndicators.setOnClickListener { toggleCoverOrLyrics() }
+
+        // Swipe down on top header to close player
+        var headerStartX = 0f
+        var headerStartY = 0f
+        binding.fullPlayerHeader.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    headerStartX = event.x
+                    headerStartY = event.y
+                    false
+                }
+                MotionEvent.ACTION_UP -> {
+                    val dy = event.y - headerStartY
+                    val dx = Math.abs(event.x - headerStartX)
+                    if (dy > 60 && dy > dx * 1.2) {
+                        closeFullscreenPlayer()
+                        true
+                    } else {
+                        false
+                    }
+                }
+                else -> false
+            }
+        }
     }
 
     private fun seekRelative(deltaMs: Long) {
@@ -1135,16 +1169,12 @@ class MainActivity : AppCompatActivity() {
 
             binding.indicatorDotLyrics.layoutParams = binding.indicatorDotLyrics.layoutParams.apply { width = activeWidth }
             binding.indicatorDotLyrics.setBackgroundResource(R.drawable.bg_indicator_dot_active)
-
-            binding.ivFullLyricsIcon.setColorFilter(ContextCompat.getColor(this, R.color.brand_emerald))
         } else {
             binding.indicatorDotCover.layoutParams = binding.indicatorDotCover.layoutParams.apply { width = activeWidth }
             binding.indicatorDotCover.setBackgroundResource(R.drawable.bg_indicator_dot_active)
 
             binding.indicatorDotLyrics.layoutParams = binding.indicatorDotLyrics.layoutParams.apply { width = inactiveWidth }
             binding.indicatorDotLyrics.setBackgroundResource(R.drawable.bg_indicator_dot_inactive)
-
-            binding.ivFullLyricsIcon.setColorFilter(Color.parseColor("#64748B"))
         }
     }
 
@@ -1157,7 +1187,6 @@ class MainActivity : AppCompatActivity() {
         lyricsJob = lifecycleScope.launch {
             binding.layoutNoLyrics.visibility = View.GONE
             binding.rvLyrics.visibility = View.VISIBLE
-            binding.tvLyricsBadge.visibility = View.GONE
 
             val lyricsData = LyricsExtractor.getLyricsData(this@MainActivity, song)
             if (currentPlayingSong?.id == song.id) {
@@ -1165,12 +1194,6 @@ class MainActivity : AppCompatActivity() {
                     lyricsAdapter.submitLyrics(lyricsData)
                     binding.layoutNoLyrics.visibility = View.GONE
                     binding.rvLyrics.visibility = View.VISIBLE
-                    if (lyricsData.isSynced) {
-                        binding.tvLyricsBadge.visibility = View.VISIBLE
-                        binding.tvLyricsBadge.text = "SYNCED"
-                    } else {
-                        binding.tvLyricsBadge.visibility = View.GONE
-                    }
 
                     // Immediately position active line
                     val curPos = mediaPlayer?.currentPosition?.toLong() ?: 0L
@@ -1194,7 +1217,6 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     lyricsAdapter.submitLyrics(LyricsData(false, emptyList()))
                     binding.rvLyrics.visibility = View.GONE
-                    binding.tvLyricsBadge.visibility = View.GONE
                     binding.layoutNoLyrics.visibility = View.VISIBLE
                 }
             }

@@ -415,49 +415,24 @@
                     android:textSize="12sp" />
             </LinearLayout>
 
-            <!-- Right Actions: Lyrics Toggle + More Button -->
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
+            <!-- Right Action: More Options Button -->
+            <FrameLayout
+                android:id="@+id/btnFullPlayerMore"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
                 android:layout_gravity="end|center_vertical"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true">
 
-                <FrameLayout
-                    android:id="@+id/btnFullLyricsToggle"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:clickable="true"
-                    android:focusable="true">
-
-                    <ImageView
-                        android:id="@+id/ivFullLyricsIcon"
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:layout_gravity="center"
-                        android:contentDescription="Lyrics"
-                        android:src="@drawable/ic_lyrics"
-                        app:tint="#64748B" />
-                </FrameLayout>
-
-                <FrameLayout
-                    android:id="@+id/btnFullPlayerMore"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:clickable="true"
-                    android:focusable="true">
-
-                    <ImageView
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:layout_gravity="center"
-                        android:contentDescription="@string/content_desc_more"
-                        android:src="@drawable/ic_more_vert"
-                        app:tint="@color/text_primary" />
-                </FrameLayout>
-            </LinearLayout>
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@string/content_desc_more"
+                    android:src="@drawable/ic_more_vert"
+                    app:tint="@color/text_primary" />
+            </FrameLayout>
         </FrameLayout>
 
         <!-- 2. Cover Art & Track Info Section -->
@@ -587,7 +562,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent">
 
-            <!-- Lyrics Mini Header (Track Info & Synced Indicator) -->
+            <!-- Lyrics Mini Header (Track Info) -->
             <LinearLayout
                 android:id="@+id/layoutLyricsMiniHeader"
                 android:layout_width="match_parent"
@@ -601,9 +576,8 @@
                 app:layout_constraintTop_toTopOf="parent">
 
                 <LinearLayout
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:orientation="vertical">
 
                     <TextView
@@ -626,21 +600,6 @@
                         android:textColor="#94A3B8"
                         android:textSize="12sp" />
                 </LinearLayout>
-
-                <TextView
-                    android:id="@+id/tvLyricsBadge"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_preset_chip"
-                    android:fontFamily="sans-serif-black"
-                    android:letterSpacing="0.08"
-                    android:paddingStart="8dp"
-                    android:paddingTop="3dp"
-                    android:paddingEnd="8dp"
-                    android:paddingBottom="3dp"
-                    android:text="SYNCED"
-                    android:textColor="@color/brand_emerald"
-                    android:textSize="10sp" />
             </LinearLayout>
 
             <!-- Borderless Synced Lyrics List with Vertical Fading Edges -->
@@ -796,6 +755,7 @@
                 android:focusable="true">
 
                 <ImageView
+                    android:id="@+id/ivFullPrev"
                     android:layout_width="26dp"
                     android:layout_height="26dp"
                     android:layout_gravity="center"
@@ -803,9 +763,9 @@
                     app:tint="@color/text_primary" />
             </FrameLayout>
 
-            <!-- Rewind 5s Button -->
+            <!-- Rewind Button -->
             <FrameLayout
-                android:id="@+id/btnFullRewind5"
+                android:id="@+id/btnFullRewind"
                 android:layout_width="0dp"
                 android:layout_height="48dp"
                 android:layout_weight="1.0"
@@ -814,10 +774,11 @@
                 android:focusable="true">
 
                 <ImageView
+                    android:id="@+id/ivFullRewind"
                     android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:layout_gravity="center"
-                    android:src="@drawable/ic_replay_5"
+                    android:src="@drawable/ic_player_rewind"
                     app:tint="@color/text_primary" />
             </FrameLayout>
 
@@ -842,9 +803,9 @@
                     app:tint="#FFFFFF" />
             </FrameLayout>
 
-            <!-- Fast Forward 5s Button -->
+            <!-- Fast Forward Button -->
             <FrameLayout
-                android:id="@+id/btnFullForward5"
+                android:id="@+id/btnFullForward"
                 android:layout_width="0dp"
                 android:layout_height="48dp"
                 android:layout_weight="1.0"
@@ -853,10 +814,11 @@
                 android:focusable="true">
 
                 <ImageView
+                    android:id="@+id/ivFullForward"
                     android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:layout_gravity="center"
-                    android:src="@drawable/ic_forward_5"
+                    android:src="@drawable/ic_player_forward"
                     app:tint="@color/text_primary" />
             </FrameLayout>
 
@@ -871,6 +833,7 @@
                 android:focusable="true">
 
                 <ImageView
+                    android:id="@+id/ivFullNext"
                     android:layout_width="26dp"
                     android:layout_height="26dp"
                     android:layout_gravity="center"
