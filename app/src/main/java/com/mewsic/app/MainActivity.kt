@@ -941,7 +941,7 @@ class MainActivity : AppCompatActivity() {
                     MotionEvent.ACTION_MOVE -> {
                         val dx = e.rawX - lyricsTouchStartX
                         val dy = e.rawY - lyricsTouchStartY
-                        if (Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+                        if (dx > 80 && dx > Math.abs(dy) * 1.5) {
                             showCoverArtView()
                             return true
                         }
@@ -1008,12 +1008,13 @@ class MainActivity : AppCompatActivity() {
                 val diffY = e2.y - e1.y
                 if (Math.abs(diffX) > Math.abs(diffY)) {
                     if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
-                        if (!isShowingLyrics) {
+                        if (!isShowingLyrics && diffX < 0) {
                             showLyricsView()
-                        } else {
+                            return true
+                        } else if (isShowingLyrics && diffX > 0) {
                             showCoverArtView()
+                            return true
                         }
-                        return true
                     }
                 } else if (diffY > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
                     closeFullscreenPlayer()
@@ -1083,9 +1084,9 @@ class MainActivity : AppCompatActivity() {
                         isDraggingDown = false
                         true
                     } else if (isHorizontalSwipe || (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy))) {
-                        if (!isShowingLyrics) {
+                        if (!isShowingLyrics && dx < 0) {
                             showLyricsView()
-                        } else {
+                        } else if (isShowingLyrics && dx > 0) {
                             showCoverArtView()
                         }
                         isHorizontalSwipe = false
@@ -1094,6 +1095,16 @@ class MainActivity : AppCompatActivity() {
                         closeFullscreenPlayer()
                         true
                     } else {
+                        if (!isShowingLyrics && Math.abs(dx) < 25 && Math.abs(dy) < 25) {
+                            val hintLocation = IntArray(2)
+                            binding.tvLyricsHint.getLocationOnScreen(hintLocation)
+                            val hintTop = hintLocation[1] - 40
+                            val hintBottom = hintLocation[1] + binding.tvLyricsHint.height + 40
+                            if (event.rawY >= hintTop && event.rawY <= hintBottom) {
+                                showLyricsView()
+                                return@OnTouchListener true
+                            }
+                        }
                         false
                     }
                 }
@@ -1109,7 +1120,30 @@ class MainActivity : AppCompatActivity() {
         binding.layoutLyricsSection.setOnTouchListener(playerTouchListener)
         binding.layoutNoLyrics.setOnTouchListener(playerTouchListener)
         binding.layoutLyricsMiniHeader.setOnTouchListener(playerTouchListener)
-        binding.tvLyricsHint.setOnClickListener { showLyricsView() }
+
+        binding.tvLyricsHint.setOnClickListener {
+            showLyricsView()
+        }
+
+        binding.tvLyricsHint.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    v.animate().scaleX(0.95f).scaleY(0.95f).setDuration(80).start()
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start()
+                    showLyricsView()
+                    v.performClick()
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start()
+                    true
+                }
+                else -> false
+            }
+        }
     }
 
     private fun seekRelative(deltaMs: Long) {

@@ -465,7 +465,7 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Swipe Right For Lyrics Hint (Fading blink indicator) -->
+            <!-- Swipe Left For Lyrics Hint (Fading blink indicator, tappable) -->
             <TextView
                 android:id="@+id/tvLyricsHint"
                 android:layout_width="wrap_content"
@@ -476,14 +476,17 @@
                 android:focusable="true"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
-                android:paddingStart="14dp"
-                android:paddingTop="5dp"
-                android:paddingEnd="14dp"
-                android:paddingBottom="5dp"
-                android:text="swipe right for lyrics -&gt;"
+                android:minHeight="48dp"
+                android:minWidth="180dp"
+                android:paddingStart="20dp"
+                android:paddingTop="10dp"
+                android:paddingEnd="20dp"
+                android:paddingBottom="10dp"
+                android:text="swipe left for lyrics &lt;-"
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 android:alpha="0.38"
+                android:elevation="6dp"
                 tools:targetApi="q"
                 android:forceDarkAllowed="false"
                 app:layout_constraintBottom_toTopOf="@+id/layoutSongInfo"
