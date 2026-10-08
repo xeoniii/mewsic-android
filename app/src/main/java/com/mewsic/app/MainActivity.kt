@@ -40,6 +40,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.mewsic.app.adapter.LyricsAdapter
 import com.mewsic.app.adapter.MainPagerAdapter
 import com.mewsic.app.adapter.PlaylistAdapter
 import com.mewsic.app.adapter.SongAdapter
@@ -59,6 +62,7 @@ import android.annotation.SuppressLint
 import android.view.GestureDetector
 import android.view.MotionEvent
 import com.mewsic.app.scanner.LyricsExtractor
+import com.mewsic.app.scanner.LyricsData
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -88,7 +92,31 @@ class MainActivity : AppCompatActivity() {
     private var isShuffle = false
     private var repeatMode = RepeatMode.ALL
     private var isShowingLyrics = false
+    private var isUserScrollingLyrics = false
+    private var lastUserLyricTouchTime = 0L
     private var lyricsJob: Job? = null
+
+    private val lyricsAdapter by lazy {
+        LyricsAdapter(
+            onLineClicked = { line, _ ->
+                if (line.timeMs >= 0) {
+                    mediaPlayer?.seekTo(line.timeMs.toInt())
+                    binding.fullPlayerSeekBar.progress = line.timeMs.toInt()
+                    binding.tvFullCurrentTime.text = formatTimeMs(line.timeMs)
+                    currentPlayingSong?.let { song ->
+                        MusicPlaybackService.startOrUpdate(
+                            context = this@MainActivity,
+                            song = song,
+                            isPlaying = isPlaying,
+                            durationMs = mediaPlayer?.duration?.toLong() ?: song.durationMs,
+                            positionMs = line.timeMs
+                        )
+                    }
+                    window.decorView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                }
+            }
+        )
+    }
 
     // Scanned Music Datasets
     private var allSongs: List<Song> = emptyList()
@@ -674,9 +702,36 @@ class MainActivity : AppCompatActivity() {
                         binding.fullPlayerSeekBar.progress = current
                         binding.tvFullCurrentTime.text = formatTimeMs(current.toLong())
                         binding.tvFullTotalTime.text = formatTimeMs(duration.toLong())
+
+                        // Real-time synced lyrics active line highlighting and smooth auto-scrolling
+                        if (isFullscreenPlayerOpen && isShowingLyrics && lyricsAdapter.isSynced()) {
+                            val curPos = current.toLong()
+                            val lines = lyricsAdapter.getLines()
+                            if (lines.isNotEmpty()) {
+                                var targetIdx = -1
+                                for (i in lines.indices) {
+                                    if (lines[i].timeMs <= curPos) {
+                                        targetIdx = i
+                                    } else {
+                                        break
+                                    }
+                                }
+                                if (targetIdx != -1) {
+                                    val changed = lyricsAdapter.setActiveIndex(targetIdx)
+                                    val now = System.currentTimeMillis()
+                                    if (changed && (!isUserScrollingLyrics || now - lastUserLyricTouchTime > 3000L)) {
+                                        isUserScrollingLyrics = false
+                                        val layoutManager = binding.rvLyrics.layoutManager as? LinearLayoutManager
+                                        val rvHeight = binding.rvLyrics.height
+                                        val offset = if (rvHeight > 0) (rvHeight * 0.35f).toInt() else 150
+                                        layoutManager?.scrollToPositionWithOffset(targetIdx, offset)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                delay(400)
+                delay(250)
             }
         }
     }
@@ -834,6 +889,45 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
+        binding.rvLyrics.layoutManager = LinearLayoutManager(this)
+        binding.rvLyrics.adapter = lyricsAdapter
+
+        binding.rvLyrics.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                super.onScrollStateChanged(recyclerView, newState)
+                if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                    isUserScrollingLyrics = true
+                    lastUserLyricTouchTime = System.currentTimeMillis()
+                }
+            }
+        })
+
+        var lyricsTouchStartX = 0f
+        var lyricsTouchStartY = 0f
+        binding.rvLyrics.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                when (e.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        lyricsTouchStartX = e.x
+                        lyricsTouchStartY = e.y
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = e.x - lyricsTouchStartX
+                        val dy = Math.abs(e.y - lyricsTouchStartY)
+                        if (dx > 90 && dx > dy * 1.5) {
+                            showCoverArtView()
+                            return true
+                        }
+                    }
+                }
+                return false
+            }
+        })
+
+        binding.btnFullLyricsToggle.setOnClickListener {
+            toggleCoverOrLyrics()
+        }
+
         setupCardSwipeGesture()
     }
 
@@ -895,38 +989,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.cardFullAlbumArt.setOnTouchListener(cardTouchListener)
         binding.ivFullAlbumArt.setOnTouchListener(cardTouchListener)
-
-        var lyricsStartX = 0f
-        var lyricsStartY = 0f
-        binding.lyricsScrollView.setOnTouchListener { v, event ->
-            gestureDetector.onTouchEvent(event)
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    lyricsStartX = event.x
-                    lyricsStartY = event.y
-                    v.parent.requestDisallowInterceptTouchEvent(true)
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = Math.abs(event.x - lyricsStartX)
-                    val dy = Math.abs(event.y - lyricsStartY)
-                    if (dx > dy && dx > 40) {
-                        v.parent.requestDisallowInterceptTouchEvent(false)
-                    } else {
-                        v.parent.requestDisallowInterceptTouchEvent(true)
-                    }
-                }
-                MotionEvent.ACTION_UP -> {
-                    val totalDx = event.x - lyricsStartX
-                    val totalDy = event.y - lyricsStartY
-                    if (Math.abs(totalDx) > Math.abs(totalDy) && totalDx > 80) {
-                        showCoverArtView()
-                    }
-                }
-            }
-            false
-        }
-
-        binding.btnBackToCover.setOnClickListener { showCoverArtView() }
+        binding.layoutCoverSection.setOnTouchListener(cardTouchListener)
         binding.layoutCardIndicators.setOnClickListener { toggleCoverOrLyrics() }
     }
 
@@ -936,75 +999,75 @@ class MainActivity : AppCompatActivity() {
         updateCardIndicators()
         loadLyricsForCurrentSong()
 
-        val cardWidth = binding.cardFullAlbumArt.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val width = binding.fullPlayerContainer.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
 
         if (!animate) {
-            binding.ivFullAlbumArt.visibility = View.GONE
-            binding.ivFullAlbumArt.translationX = 0f
-            binding.ivFullAlbumArt.alpha = 1f
-            binding.layoutLyrics.visibility = View.VISIBLE
-            binding.layoutLyrics.translationX = 0f
-            binding.layoutLyrics.alpha = 1f
+            binding.layoutCoverSection.visibility = View.GONE
+            binding.layoutCoverSection.translationX = 0f
+            binding.layoutCoverSection.alpha = 1f
+            binding.layoutLyricsSection.visibility = View.VISIBLE
+            binding.layoutLyricsSection.translationX = 0f
+            binding.layoutLyricsSection.alpha = 1f
             return
         }
 
-        binding.layoutLyrics.visibility = View.VISIBLE
-        binding.layoutLyrics.translationX = cardWidth.toFloat()
-        binding.layoutLyrics.alpha = 0f
+        binding.layoutLyricsSection.visibility = View.VISIBLE
+        binding.layoutLyricsSection.translationX = width * 0.45f
+        binding.layoutLyricsSection.alpha = 0f
 
-        binding.ivFullAlbumArt.animate()
-            .translationX(-cardWidth * 0.4f)
+        binding.layoutCoverSection.animate()
+            .translationX(-width * 0.45f)
             .alpha(0f)
-            .setDuration(280)
+            .setDuration(300)
             .setInterpolator(DecelerateInterpolator(1.4f))
             .withEndAction {
-                binding.ivFullAlbumArt.visibility = View.GONE
+                binding.layoutCoverSection.visibility = View.GONE
             }
             .start()
 
-        binding.layoutLyrics.animate()
+        binding.layoutLyricsSection.animate()
             .translationX(0f)
             .alpha(1f)
-            .setDuration(280)
+            .setDuration(300)
             .setInterpolator(DecelerateInterpolator(1.4f))
             .start()
     }
 
     private fun showCoverArtView(animate: Boolean = true) {
-        if (!isShowingLyrics && binding.ivFullAlbumArt.visibility == View.VISIBLE) return
+        if (!isShowingLyrics && binding.layoutCoverSection.visibility == View.VISIBLE) return
         isShowingLyrics = false
         updateCardIndicators()
 
-        val cardWidth = binding.cardFullAlbumArt.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val width = binding.fullPlayerContainer.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
 
         if (!animate) {
-            binding.layoutLyrics.visibility = View.GONE
-            binding.layoutLyrics.translationX = 0f
-            binding.layoutLyrics.alpha = 1f
-            binding.ivFullAlbumArt.visibility = View.VISIBLE
-            binding.ivFullAlbumArt.translationX = 0f
-            binding.ivFullAlbumArt.alpha = 1f
+            binding.layoutLyricsSection.visibility = View.GONE
+            binding.layoutLyricsSection.translationX = 0f
+            binding.layoutLyricsSection.alpha = 1f
+            binding.layoutCoverSection.visibility = View.VISIBLE
+            binding.layoutCoverSection.translationX = 0f
+            binding.layoutCoverSection.alpha = 1f
             return
         }
 
-        binding.ivFullAlbumArt.visibility = View.VISIBLE
-        binding.ivFullAlbumArt.translationX = -cardWidth.toFloat()
-        binding.ivFullAlbumArt.alpha = 0f
+        binding.layoutCoverSection.visibility = View.VISIBLE
+        binding.layoutCoverSection.translationX = -width * 0.45f
+        binding.layoutCoverSection.alpha = 0f
 
-        binding.layoutLyrics.animate()
-            .translationX(cardWidth * 0.4f)
+        binding.layoutLyricsSection.animate()
+            .translationX(width * 0.45f)
             .alpha(0f)
-            .setDuration(280)
+            .setDuration(300)
             .setInterpolator(DecelerateInterpolator(1.4f))
             .withEndAction {
-                binding.layoutLyrics.visibility = View.GONE
+                binding.layoutLyricsSection.visibility = View.GONE
             }
             .start()
 
-        binding.ivFullAlbumArt.animate()
+        binding.layoutCoverSection.animate()
             .translationX(0f)
             .alpha(1f)
-            .setDuration(280)
+            .setDuration(300)
             .setInterpolator(DecelerateInterpolator(1.4f))
             .start()
     }
@@ -1028,32 +1091,66 @@ class MainActivity : AppCompatActivity() {
 
             binding.indicatorDotLyrics.layoutParams = binding.indicatorDotLyrics.layoutParams.apply { width = activeWidth }
             binding.indicatorDotLyrics.setBackgroundResource(R.drawable.bg_indicator_dot_active)
+
+            binding.ivFullLyricsIcon.setColorFilter(ContextCompat.getColor(this, R.color.brand_emerald))
         } else {
             binding.indicatorDotCover.layoutParams = binding.indicatorDotCover.layoutParams.apply { width = activeWidth }
             binding.indicatorDotCover.setBackgroundResource(R.drawable.bg_indicator_dot_active)
 
             binding.indicatorDotLyrics.layoutParams = binding.indicatorDotLyrics.layoutParams.apply { width = inactiveWidth }
             binding.indicatorDotLyrics.setBackgroundResource(R.drawable.bg_indicator_dot_inactive)
+
+            binding.ivFullLyricsIcon.setColorFilter(Color.parseColor("#64748B"))
         }
     }
 
     private fun loadLyricsForCurrentSong() {
         val song = currentPlayingSong ?: return
+        binding.tvLyricsMiniTitle.text = song.title
+        binding.tvLyricsMiniArtist.text = song.artist
+
         lyricsJob?.cancel()
         lyricsJob = lifecycleScope.launch {
-            binding.tvLyricsContent.text = "Loading lyrics..."
-            binding.tvLyricsContent.visibility = View.VISIBLE
             binding.layoutNoLyrics.visibility = View.GONE
-            binding.lyricsScrollView.scrollTo(0, 0)
+            binding.rvLyrics.visibility = View.VISIBLE
+            binding.tvLyricsBadge.visibility = View.GONE
 
-            val lyrics = LyricsExtractor.getLyrics(this@MainActivity, song)
+            val lyricsData = LyricsExtractor.getLyricsData(this@MainActivity, song)
             if (currentPlayingSong?.id == song.id) {
-                if (!lyrics.isNullOrBlank()) {
-                    binding.tvLyricsContent.text = lyrics
-                    binding.tvLyricsContent.visibility = View.VISIBLE
+                if (!lyricsData.isEmpty) {
+                    lyricsAdapter.submitLyrics(lyricsData)
                     binding.layoutNoLyrics.visibility = View.GONE
+                    binding.rvLyrics.visibility = View.VISIBLE
+                    if (lyricsData.isSynced) {
+                        binding.tvLyricsBadge.visibility = View.VISIBLE
+                        binding.tvLyricsBadge.text = "SYNCED"
+                    } else {
+                        binding.tvLyricsBadge.visibility = View.GONE
+                    }
+
+                    // Immediately position active line
+                    val curPos = mediaPlayer?.currentPosition?.toLong() ?: 0L
+                    if (lyricsData.isSynced && lyricsData.lines.isNotEmpty()) {
+                        var targetIdx = -1
+                        for (i in lyricsData.lines.indices) {
+                            if (lyricsData.lines[i].timeMs <= curPos) {
+                                targetIdx = i
+                            } else {
+                                break
+                            }
+                        }
+                        if (targetIdx != -1) {
+                            lyricsAdapter.setActiveIndex(targetIdx)
+                            val layoutManager = binding.rvLyrics.layoutManager as? LinearLayoutManager
+                            val rvHeight = binding.rvLyrics.height
+                            val offset = if (rvHeight > 0) (rvHeight * 0.35f).toInt() else 150
+                            layoutManager?.scrollToPositionWithOffset(targetIdx, offset)
+                        }
+                    }
                 } else {
-                    binding.tvLyricsContent.visibility = View.GONE
+                    lyricsAdapter.submitLyrics(LyricsData(false, emptyList()))
+                    binding.rvLyrics.visibility = View.GONE
+                    binding.tvLyricsBadge.visibility = View.GONE
                     binding.layoutNoLyrics.visibility = View.VISIBLE
                 }
             }

@@ -4,21 +4,34 @@ import android.content.Context
 import com.mewsic.app.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
 import java.io.RandomAccessFile
 
+data class LyricLine(
+    val timeMs: Long, // -1 if unsynced
+    val text: String
+)
+
+data class LyricsData(
+    val isSynced: Boolean,
+    val lines: List<LyricLine>
+) {
+    val isEmpty: Boolean get() = lines.isEmpty()
+}
+
 object LyricsExtractor {
 
-    private val lyricsCache = HashMap<Long, String>()
+    private val lyricsCache = HashMap<Long, LyricsData>()
+    private val TIMESTAMP_REGEX = Regex("""\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]""")
+    private val HEADER_REGEX = Regex("""^\[(ti|ar|al|by|offset|length|re|ve):.*\]$""", RegexOption.IGNORE_CASE)
 
-    suspend fun getLyrics(context: Context, song: Song): String? = withContext(Dispatchers.IO) {
+    suspend fun getLyricsData(context: Context, song: Song): LyricsData = withContext(Dispatchers.IO) {
         synchronized(lyricsCache) {
             lyricsCache[song.id]?.let { return@withContext it }
         }
 
-        var lyrics: String? = null
+        var rawLyrics: String? = null
 
         // 1. Try sidecar .lrc or .txt file in the same directory as the song
         if (song.filePath.isNotBlank()) {
@@ -26,50 +39,109 @@ object LyricsExtractor {
                 val base = song.filePath.substringBeforeLast('.')
                 val lrcFile = File("$base.lrc")
                 if (lrcFile.exists() && lrcFile.isFile && lrcFile.length() > 0) {
-                    lyrics = cleanLyricsText(lrcFile.readText(Charsets.UTF_8))
+                    rawLyrics = lrcFile.readText(Charsets.UTF_8)
                 }
-                if (lyrics.isNullOrBlank()) {
+                if (rawLyrics.isNullOrBlank()) {
                     val txtFile = File("$base.txt")
                     if (txtFile.exists() && txtFile.isFile && txtFile.length() > 0) {
-                        lyrics = cleanLyricsText(txtFile.readText(Charsets.UTF_8))
+                        rawLyrics = txtFile.readText(Charsets.UTF_8)
                     }
                 }
             } catch (_: Exception) {}
         }
 
         // 2. Try parsing embedded lyrics directly from the audio file
-        if (lyrics.isNullOrBlank() && song.filePath.isNotBlank()) {
+        if (rawLyrics.isNullOrBlank() && song.filePath.isNotBlank()) {
             try {
                 val file = File(song.filePath)
                 if (file.exists() && file.isFile) {
-                    val raw = extractFromFile(file)
-                    if (!raw.isNullOrBlank()) {
-                        lyrics = cleanLyricsText(raw)
+                    val extracted = extractFromFile(file)
+                    if (!extracted.isNullOrBlank()) {
+                        rawLyrics = extracted
                     }
                 }
             } catch (_: Exception) {}
         }
 
         // 3. Try reading stream via contentResolver for scoped storage URIs
-        if (lyrics.isNullOrBlank()) {
+        if (rawLyrics.isNullOrBlank()) {
             try {
                 context.contentResolver.openInputStream(song.contentUri)?.use { stream ->
-                    val raw = extractFromStream(stream)
-                    if (!raw.isNullOrBlank()) {
-                        lyrics = cleanLyricsText(raw)
+                    val extracted = extractFromStream(stream)
+                    if (!extracted.isNullOrBlank()) {
+                        rawLyrics = extracted
                     }
                 }
             } catch (_: Exception) {}
         }
 
-        val finalLyrics = lyrics
-        if (!finalLyrics.isNullOrBlank()) {
-            synchronized(lyricsCache) {
-                lyricsCache[song.id] = finalLyrics
+        val lyricsString = rawLyrics
+        val result = if (!lyricsString.isNullOrBlank()) {
+            parseLyricsData(lyricsString)
+        } else {
+            LyricsData(isSynced = false, lines = emptyList())
+        }
+
+        synchronized(lyricsCache) {
+            lyricsCache[song.id] = result
+        }
+
+        result
+    }
+
+    suspend fun getLyrics(context: Context, song: Song): String? {
+        val data = getLyricsData(context, song)
+        if (data.isEmpty) return null
+        return data.lines.joinToString("\n") { it.text }
+    }
+
+    fun parseLyricsData(raw: String): LyricsData {
+        val normalized = raw.replace("\r\n", "\n").replace("\r", "\n")
+        val rawLines = normalized.lines()
+        val parsedList = mutableListOf<LyricLine>()
+        var foundAnyTimestamp = false
+
+        for (line in rawLines) {
+            val trimmed = line.trim()
+            if (trimmed.isBlank() || HEADER_REGEX.matches(trimmed)) continue
+
+            val matches = TIMESTAMP_REGEX.findAll(trimmed).toList()
+            if (matches.isNotEmpty()) {
+                foundAnyTimestamp = true
+                val cleanText = trimmed.replace(TIMESTAMP_REGEX, "").trim()
+                for (match in matches) {
+                    val min = match.groupValues[1].toLongOrNull() ?: 0L
+                    val sec = match.groupValues[2].toLongOrNull() ?: 0L
+                    val fracStr = match.groupValues.getOrNull(3).orEmpty()
+                    val ms = when (fracStr.length) {
+                        1 -> (fracStr.toLongOrNull() ?: 0L) * 100
+                        2 -> (fracStr.toLongOrNull() ?: 0L) * 10
+                        3 -> fracStr.toLongOrNull() ?: 0L
+                        else -> 0L
+                    }
+                    val totalMs = min * 60_000L + sec * 1000L + ms
+                    parsedList.add(LyricLine(totalMs, cleanText))
+                }
+            } else {
+                parsedList.add(LyricLine(-1L, trimmed))
             }
         }
 
-        finalLyrics
+        if (foundAnyTimestamp) {
+            val syncedLines = parsedList
+                .filter { it.timeMs >= 0 && it.text.isNotBlank() }
+                .sortedBy { it.timeMs }
+            if (syncedLines.isNotEmpty()) {
+                return LyricsData(isSynced = true, lines = syncedLines)
+            }
+        }
+
+        val plainLines = rawLines
+            .map { it.trim() }
+            .filter { it.isNotBlank() && !HEADER_REGEX.matches(it) }
+            .map { LyricLine(-1L, it) }
+
+        return LyricsData(isSynced = false, lines = plainLines)
     }
 
     private fun extractFromFile(file: File): String? {
@@ -146,7 +218,6 @@ object LyricsExtractor {
         val tagEnd = 10L + tagSize
         var currentPos = 10L
 
-        // Skip extended header if present
         if ((flags and 0x40) != 0) {
             val extHeaderSize = if (version == 4) {
                 val b = ByteArray(4)
@@ -203,7 +274,7 @@ object LyricsExtractor {
                     (b[3].toInt() and 0xFF)
                 }
 
-                raf.skipBytes(2) // 2 flags bytes
+                raf.skipBytes(2)
                 val payloadStart = currentPos + 10
                 currentPos += 10 + frameSize
                 if (frameSize <= 0 || currentPos > tagEnd + 10) break
@@ -284,7 +355,6 @@ object LyricsExtractor {
             else -> Charsets.ISO_8859_1
         }
 
-        // Language is at 1..3. Descriptor starts at offset 4.
         var textOffset = 4
         if (encodingByte == 1 || encodingByte == 2) {
             while (textOffset + 1 < data.size) {
@@ -346,22 +416,41 @@ object LyricsExtractor {
                 while (offset + 1 < data.size && !(data[offset] == 0.toByte() && data[offset + 1] == 0.toByte())) {
                     offset += 2
                 }
-                if (offset > textStart) {
-                    val line = String(data, textStart, offset - textStart, charset).trim()
-                    if (line.isNotBlank()) sb.append(line).append("\n")
-                }
+                val text = if (offset > textStart) String(data, textStart, offset - textStart, charset).trim() else ""
                 offset += 2
+                if (offset + 4 <= data.size) {
+                    val timeMs = ((data[offset].toLong() and 0xFF) shl 24) or
+                                 ((data[offset + 1].toLong() and 0xFF) shl 16) or
+                                 ((data[offset + 2].toLong() and 0xFF) shl 8) or
+                                 (data[offset + 3].toLong() and 0xFF)
+                    offset += 4
+                    if (text.isNotBlank()) {
+                        val min = timeMs / 60000L
+                        val sec = (timeMs % 60000L) / 1000L
+                        val ms = (timeMs % 1000L) / 10L
+                        sb.append(String.format("[%02d:%02d.%02d]%s\n", min, sec, ms, text))
+                    }
+                }
             } else {
                 while (offset < data.size && data[offset] != 0.toByte()) {
                     offset++
                 }
-                if (offset > textStart) {
-                    val line = String(data, textStart, offset - textStart, charset).trim()
-                    if (line.isNotBlank()) sb.append(line).append("\n")
-                }
+                val text = if (offset > textStart) String(data, textStart, offset - textStart, charset).trim() else ""
                 offset++
+                if (offset + 4 <= data.size) {
+                    val timeMs = ((data[offset].toLong() and 0xFF) shl 24) or
+                                 ((data[offset + 1].toLong() and 0xFF) shl 16) or
+                                 ((data[offset + 2].toLong() and 0xFF) shl 8) or
+                                 (data[offset + 3].toLong() and 0xFF)
+                    offset += 4
+                    if (text.isNotBlank()) {
+                        val min = timeMs / 60000L
+                        val sec = (timeMs % 60000L) / 1000L
+                        val ms = (timeMs % 1000L) / 10L
+                        sb.append(String.format("[%02d:%02d.%02d]%s\n", min, sec, ms, text))
+                    }
+                }
             }
-            offset += 4 // skip 4-byte timestamp
         }
 
         return sb.toString().trim().ifBlank { null }
@@ -404,7 +493,7 @@ object LyricsExtractor {
     }
 
     private fun parseFlac(raf: RandomAccessFile): String? {
-        raf.seek(4) // after 'fLaC'
+        raf.seek(4)
         var isLast = false
         while (!isLast) {
             val headerByte = raf.read()
@@ -418,7 +507,7 @@ object LyricsExtractor {
             if (b0 < 0 || b1 < 0 || b2 < 0) break
             val length = (b0 shl 16) or (b1 shl 8) or b2
 
-            if (blockType == 4) { // VORBIS_COMMENT
+            if (blockType == 4) {
                 val data = ByteArray(length)
                 raf.readFully(data)
                 return parseVorbisComment(data)
@@ -433,7 +522,6 @@ object LyricsExtractor {
         if (data.size < 8) return null
         var offset = 0
 
-        // Vendor string length (32-bit Little Endian)
         val vendorLength = (data[offset].toInt() and 0xFF) or
                           ((data[offset + 1].toInt() and 0xFF) shl 8) or
                           ((data[offset + 2].toInt() and 0xFF) shl 16) or
@@ -441,7 +529,6 @@ object LyricsExtractor {
         offset += 4 + vendorLength
         if (offset + 4 > data.size) return null
 
-        // User comment list length (32-bit LE)
         val count = (data[offset].toInt() and 0xFF) or
                     ((data[offset + 1].toInt() and 0xFF) shl 8) or
                     ((data[offset + 2].toInt() and 0xFF) shl 16) or
@@ -470,20 +557,17 @@ object LyricsExtractor {
     }
 
     private fun parseMp4(raf: RandomAccessFile): String? {
-        // Search for '©lyr' atom across file (atoms usually within first 500KB)
         val maxSearch = minOf(raf.length(), 500_000L)
         val buffer = ByteArray(maxSearch.toInt())
         raf.seek(0)
         val read = raf.read(buffer)
         if (read <= 0) return null
 
-        // Find byte signature for '©lyr': 0xA9, 0x6C, 0x79, 0x72
         val target = byteArrayOf(0xA9.toByte(), 0x6C.toByte(), 0x79.toByte(), 0x72.toByte())
         var idx = 0
         while (idx < read - 20) {
             if (buffer[idx] == target[0] && buffer[idx + 1] == target[1] &&
                 buffer[idx + 2] == target[2] && buffer[idx + 3] == target[3]) {
-                // Inside ©lyr atom, look for 'data' atom
                 var sub = idx + 4
                 while (sub < minOf(idx + 500, read - 12)) {
                     if (buffer[sub + 4] == 'd'.code.toByte() && buffer[sub + 5] == 'a'.code.toByte() &&
@@ -492,7 +576,7 @@ object LyricsExtractor {
                                       ((buffer[sub + 1].toInt() and 0xFF) shl 16) or
                                       ((buffer[sub + 2].toInt() and 0xFF) shl 8) or
                                       (buffer[sub + 3].toInt() and 0xFF)
-                        val textStart = sub + 16 // skip data atom header + 8 flag bytes
+                        val textStart = sub + 16
                         val textLen = dataLen - 16
                         if (textLen > 0 && textStart + textLen <= read) {
                             return String(buffer, textStart, textLen, Charsets.UTF_8).trim()
@@ -520,7 +604,6 @@ object LyricsExtractor {
         val endIdx = str.indexOf("LYRICS200")
         if (beginIdx != -1 && endIdx != -1 && beginIdx < endIdx) {
             val content = str.substring(beginIdx + 11, endIdx)
-            // Fields are in format ID (3 chars), Length (5 digits), Value
             var pos = 0
             while (pos + 8 < content.length) {
                 val fieldId = content.substring(pos, pos + 3)
@@ -536,22 +619,5 @@ object LyricsExtractor {
             }
         }
         return null
-    }
-
-    fun cleanLyricsText(raw: String): String {
-        val normalized = raw.replace("\r\n", "\n").replace("\r", "\n")
-        val lrcRegex = Regex("""^\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]\s*""")
-        val headerRegex = Regex("""^\[(ti|ar|al|by|offset|length|re|ve):.*\]$""", RegexOption.IGNORE_CASE)
-
-        val lines = normalized.lines().mapNotNull { line ->
-            var cleaned = line.trim()
-            if (headerRegex.matches(cleaned)) return@mapNotNull null
-            while (lrcRegex.containsMatchIn(cleaned)) {
-                cleaned = cleaned.replace(lrcRegex, "").trim()
-            }
-            cleaned
-        }
-
-        return lines.joinToString("\n").trim()
     }
 }
