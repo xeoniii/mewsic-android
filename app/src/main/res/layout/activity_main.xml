@@ -449,7 +449,7 @@
                 app:cardPreventCornerOverlap="true"
                 app:strokeColor="#1E2A38"
                 app:strokeWidth="1dp"
-                app:layout_constraintBottom_toTopOf="@+id/layoutCardIndicators"
+                app:layout_constraintBottom_toTopOf="@+id/tvLyricsHint"
                 app:layout_constraintDimensionRatio="1:1"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
@@ -465,39 +465,31 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Card Page Indicator (Cover Art / Lyrics) -->
-            <LinearLayout
-                android:id="@+id/layoutCardIndicators"
+            <!-- Swipe Right For Lyrics Hint (Fading blink indicator) -->
+            <TextView
+                android:id="@+id/tvLyricsHint"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:focusable="true"
+                android:fontFamily="sans-serif-medium"
                 android:gravity="center"
-                android:orientation="horizontal"
-                android:padding="6dp"
+                android:paddingStart="14dp"
+                android:paddingTop="5dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="5dp"
+                android:text="swipe right for lyrics -&gt;"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:alpha="0.38"
+                tools:targetApi="q"
+                android:forceDarkAllowed="false"
                 app:layout_constraintBottom_toTopOf="@+id/layoutSongInfo"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@+id/cardFullAlbumArt">
-
-                <!-- Dot 1: Cover -->
-                <View
-                    android:id="@+id/indicatorDotCover"
-                    android:layout_width="16dp"
-                    android:layout_height="4dp"
-                    android:layout_marginEnd="6dp"
-                    android:background="@drawable/bg_indicator_dot_active" />
-
-                <!-- Dot 2: Lyrics -->
-                <View
-                    android:id="@+id/indicatorDotLyrics"
-                    android:layout_width="6dp"
-                    android:layout_height="4dp"
-                    android:background="@drawable/bg_indicator_dot_inactive" />
-
-            </LinearLayout>
+                app:layout_constraintTop_toBottomOf="@+id/cardFullAlbumArt" />
 
             <!-- Song Info (Title & Artist) -->
             <LinearLayout

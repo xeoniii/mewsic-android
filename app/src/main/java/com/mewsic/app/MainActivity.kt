@@ -95,6 +95,7 @@ class MainActivity : AppCompatActivity() {
     private var isUserScrollingLyrics = false
     private var lastUserLyricTouchTime = 0L
     private var lyricsJob: Job? = null
+    private var lyricsHintAnimator: ValueAnimator? = null
 
     private val lyricsAdapter by lazy {
         LyricsAdapter(
@@ -940,7 +941,7 @@ class MainActivity : AppCompatActivity() {
                     MotionEvent.ACTION_MOVE -> {
                         val dx = e.rawX - lyricsTouchStartX
                         val dy = e.rawY - lyricsTouchStartY
-                        if (dx > 80 && dx > Math.abs(dy) * 1.5) {
+                        if (Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy) * 1.5) {
                             showCoverArtView()
                             return true
                         }
@@ -1007,7 +1008,7 @@ class MainActivity : AppCompatActivity() {
                 val diffY = e2.y - e1.y
                 if (Math.abs(diffX) > Math.abs(diffY)) {
                     if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
-                        if (diffX < 0) {
+                        if (!isShowingLyrics) {
                             showLyricsView()
                         } else {
                             showCoverArtView()
@@ -1082,7 +1083,7 @@ class MainActivity : AppCompatActivity() {
                         isDraggingDown = false
                         true
                     } else if (isHorizontalSwipe || (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy))) {
-                        if (dx < 0) {
+                        if (!isShowingLyrics) {
                             showLyricsView()
                         } else {
                             showCoverArtView()
@@ -1108,7 +1109,7 @@ class MainActivity : AppCompatActivity() {
         binding.layoutLyricsSection.setOnTouchListener(playerTouchListener)
         binding.layoutNoLyrics.setOnTouchListener(playerTouchListener)
         binding.layoutLyricsMiniHeader.setOnTouchListener(playerTouchListener)
-        binding.layoutCardIndicators.setOnClickListener { toggleCoverOrLyrics() }
+        binding.tvLyricsHint.setOnClickListener { showLyricsView() }
     }
 
     private fun seekRelative(deltaMs: Long) {
@@ -1134,7 +1135,7 @@ class MainActivity : AppCompatActivity() {
     private fun showLyricsView(animate: Boolean = true) {
         if (isShowingLyrics) return
         isShowingLyrics = true
-        updateCardIndicators()
+        lyricsHintAnimator?.cancel()
         loadLyricsForCurrentSong()
 
         val width = binding.fullPlayerContainer.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
@@ -1174,7 +1175,7 @@ class MainActivity : AppCompatActivity() {
     private fun showCoverArtView(animate: Boolean = true) {
         if (!isShowingLyrics && binding.layoutCoverSection.visibility == View.VISIBLE) return
         isShowingLyrics = false
-        updateCardIndicators()
+        playLyricsHintBlinkAnimation()
 
         val width = binding.fullPlayerContainer.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
 
@@ -1218,24 +1219,22 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateCardIndicators() {
-        val density = resources.displayMetrics.density
-        val activeWidth = (16 * density).toInt()
-        val inactiveWidth = (6 * density).toInt()
+    private fun playLyricsHintBlinkAnimation() {
+        lyricsHintAnimator?.cancel()
+        val hintView = binding.tvLyricsHint
+        hintView.visibility = View.VISIBLE
+        hintView.alpha = 0.35f
 
-        if (isShowingLyrics) {
-            binding.indicatorDotCover.layoutParams = binding.indicatorDotCover.layoutParams.apply { width = inactiveWidth }
-            binding.indicatorDotCover.setBackgroundResource(R.drawable.bg_indicator_dot_inactive)
-
-            binding.indicatorDotLyrics.layoutParams = binding.indicatorDotLyrics.layoutParams.apply { width = activeWidth }
-            binding.indicatorDotLyrics.setBackgroundResource(R.drawable.bg_indicator_dot_active)
-        } else {
-            binding.indicatorDotCover.layoutParams = binding.indicatorDotCover.layoutParams.apply { width = activeWidth }
-            binding.indicatorDotCover.setBackgroundResource(R.drawable.bg_indicator_dot_active)
-
-            binding.indicatorDotLyrics.layoutParams = binding.indicatorDotLyrics.layoutParams.apply { width = inactiveWidth }
-            binding.indicatorDotLyrics.setBackgroundResource(R.drawable.bg_indicator_dot_inactive)
+        // Fading blink twice: 0.35 -> 0.95 -> 0.20 -> 0.95 -> 0.38 (stays there at low opacity)
+        val animator = ValueAnimator.ofFloat(0.35f, 0.95f, 0.20f, 0.95f, 0.38f).apply {
+            duration = 1600L
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { animation ->
+                hintView.alpha = animation.animatedValue as Float
+            }
         }
+        lyricsHintAnimator = animator
+        animator.start()
     }
 
     private fun loadLyricsForCurrentSong() {
@@ -1304,6 +1303,10 @@ class MainActivity : AppCompatActivity() {
             .setInterpolator(DecelerateInterpolator(1.4f))
             .start()
 
+        if (!isShowingLyrics) {
+            playLyricsHintBlinkAnimation()
+        }
+
         binding.playerBarWrapper.animate()
             .alpha(0f)
             .scaleX(0.95f)
@@ -1341,6 +1344,7 @@ class MainActivity : AppCompatActivity() {
                 binding.fullPlayerContainer.translationY = 0f
                 binding.ivFullAlbumArt.setImageDrawable(null)
                 binding.ivFullPlayerBlurredBg.setImageDrawable(null)
+                lyricsHintAnimator?.cancel()
                 showCoverArtView(animate = false)
             }
             .start()
