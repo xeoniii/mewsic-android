@@ -203,7 +203,7 @@ class MusicPlaybackService : Service() {
         if (cached == null) {
             serviceScope.launch {
                 val fullBitmap = withContext(Dispatchers.IO) {
-                    ThumbnailLoader.getOrLoadBitmap(applicationContext, song, 256)
+                    ThumbnailLoader.getOrLoadBitmap(applicationContext, song, 512)
                 }
 
                 val updatedMetadata = MediaMetadataCompat.Builder()

@@ -17,6 +17,18 @@ class SongAdapter(
     private val onSongLongClicked: ((song: Song, position: Int) -> Unit)? = null
 ) : ListAdapter<Song, SongAdapter.SongViewHolder>(SongDiffCallback()) {
 
+    companion object {
+        private const val PAYLOAD_COVER_ART = "payload_cover_art"
+    }
+
+    var areCoverArtsRendered: Boolean = true
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyItemRangeChanged(0, itemCount, PAYLOAD_COVER_ART)
+            }
+        }
+
     var activeSongId: Long? = null
         set(value) {
             val oldId = field
@@ -40,6 +52,18 @@ class SongAdapter(
 
     override fun onBindViewHolder(holder: SongViewHolder, position: Int) {
         holder.bind(getItem(position), position)
+    }
+
+    override fun onBindViewHolder(
+        holder: SongViewHolder,
+        position: Int,
+        payloads: MutableList<Any>
+    ) {
+        if (payloads.contains(PAYLOAD_COVER_ART)) {
+            holder.updateCoverArt(getItem(position))
+        } else {
+            super.onBindViewHolder(holder, position, payloads)
+        }
     }
 
     inner class SongViewHolder(
@@ -88,8 +112,8 @@ class SongAdapter(
                 binding.songRowContainer.setBackgroundResource(R.drawable.bg_song_card_idle)
             }
 
-            // Load album art thumbnail asynchronously with LRU cache & PC app fallback
-            ThumbnailLoader.loadThumbnail(binding.ivAlbumArt, song)
+            // Render cover art only when rendering is active
+            updateCoverArt(song)
 
             binding.root.setOnClickListener {
                 onSongClicked(song, bindingAdapterPosition)
@@ -98,6 +122,14 @@ class SongAdapter(
             binding.root.setOnLongClickListener {
                 onSongLongClicked?.invoke(song, bindingAdapterPosition)
                 true
+            }
+        }
+
+        fun updateCoverArt(song: Song) {
+            if (areCoverArtsRendered) {
+                ThumbnailLoader.loadThumbnail(binding.ivAlbumArt, song)
+            } else {
+                binding.ivAlbumArt.setImageDrawable(null)
             }
         }
     }

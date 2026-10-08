@@ -19,6 +19,18 @@ class PlaylistAdapter(
     private val onPlaylistMoreClicked: (playlist: PlaylistInfo, anchorView: View) -> Unit
 ) : ListAdapter<PlaylistInfo, PlaylistAdapter.PlaylistViewHolder>(PlaylistDiffCallback()) {
 
+    companion object {
+        private const val PAYLOAD_COVER_ART = "payload_cover_art"
+    }
+
+    var areCoverArtsRendered: Boolean = true
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyItemRangeChanged(0, itemCount, PAYLOAD_COVER_ART)
+            }
+        }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PlaylistViewHolder {
         val binding = ItemPlaylistCardBinding.inflate(
             LayoutInflater.from(parent.context),
@@ -32,6 +44,18 @@ class PlaylistAdapter(
         holder.bind(getItem(position))
     }
 
+    override fun onBindViewHolder(
+        holder: PlaylistViewHolder,
+        position: Int,
+        payloads: MutableList<Any>
+    ) {
+        if (payloads.contains(PAYLOAD_COVER_ART)) {
+            holder.updateCoverArt(getItem(position))
+        } else {
+            super.onBindViewHolder(holder, position, payloads)
+        }
+    }
+
     inner class PlaylistViewHolder(
         private val binding: ItemPlaylistCardBinding
     ) : RecyclerView.ViewHolder(binding.root) {
@@ -42,22 +66,7 @@ class PlaylistAdapter(
             binding.tvPlaylistTrackCount.text = countStr
             binding.btnPlaylistMore.visibility = View.VISIBLE
 
-            // Load first song's thumbnail as playlist cover, or fallback icon if playlist is empty
-            if (playlist.firstSong != null) {
-                binding.ivPlaylistCover.scaleType = ImageView.ScaleType.CENTER_CROP
-                binding.ivPlaylistCover.setPadding(0, 0, 0, 0)
-                binding.ivPlaylistCover.clearColorFilter()
-                ThumbnailLoader.loadThumbnail(binding.ivPlaylistCover, playlist.firstSong)
-            } else {
-                binding.ivPlaylistCover.scaleType = ImageView.ScaleType.CENTER_INSIDE
-                val pad = (12 * binding.root.resources.displayMetrics.density).toInt()
-                binding.ivPlaylistCover.setPadding(pad, pad, pad, pad)
-                binding.ivPlaylistCover.setImageResource(R.drawable.ic_tab_playlist)
-                binding.ivPlaylistCover.setColorFilter(
-                    ContextCompat.getColor(binding.root.context, R.color.tab_active_tint),
-                    PorterDuff.Mode.SRC_IN
-                )
-            }
+            updateCoverArt(playlist)
 
             binding.root.setOnClickListener {
                 onPlaylistClicked(playlist)
@@ -65,6 +74,28 @@ class PlaylistAdapter(
 
             binding.btnPlaylistMore.setOnClickListener {
                 onPlaylistMoreClicked(playlist, it)
+            }
+        }
+
+        fun updateCoverArt(playlist: PlaylistInfo) {
+            if (areCoverArtsRendered) {
+                if (playlist.firstSong != null) {
+                    binding.ivPlaylistCover.scaleType = ImageView.ScaleType.CENTER_CROP
+                    binding.ivPlaylistCover.setPadding(0, 0, 0, 0)
+                    binding.ivPlaylistCover.clearColorFilter()
+                    ThumbnailLoader.loadThumbnail(binding.ivPlaylistCover, playlist.firstSong)
+                } else {
+                    binding.ivPlaylistCover.scaleType = ImageView.ScaleType.CENTER_INSIDE
+                    val pad = (12 * binding.root.resources.displayMetrics.density).toInt()
+                    binding.ivPlaylistCover.setPadding(pad, pad, pad, pad)
+                    binding.ivPlaylistCover.setImageResource(R.drawable.ic_tab_playlist)
+                    binding.ivPlaylistCover.setColorFilter(
+                        ContextCompat.getColor(binding.root.context, R.color.tab_active_tint),
+                        PorterDuff.Mode.SRC_IN
+                    )
+                }
+            } else {
+                binding.ivPlaylistCover.setImageDrawable(null)
             }
         }
     }

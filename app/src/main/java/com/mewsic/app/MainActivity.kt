@@ -476,7 +476,9 @@ class MainActivity : AppCompatActivity() {
         // Instantly update fullscreen player UI (0ms delay)
         binding.tvFullTitle.text = song.title
         binding.tvFullArtist.text = song.artist
-        ThumbnailLoader.loadThumbnail(binding.ivFullAlbumArt, song)
+        if (isFullscreenPlayerOpen) {
+            ThumbnailLoader.loadHighResArt(binding.ivFullAlbumArt, song)
+        }
         binding.ivFullPlayPause.setImageResource(R.drawable.ic_player_pause)
         binding.fullPlayerSeekBar.max = song.durationMs.toInt()
         binding.fullPlayerSeekBar.progress = 0
@@ -841,6 +843,15 @@ class MainActivity : AppCompatActivity() {
             .alpha(1f)
             .setDuration(320)
             .setInterpolator(DecelerateInterpolator(1.4f))
+            .withEndAction {
+                // When fullscreen player is open, unrender list cover arts and hide underlying views to save bandwidth and memory
+                binding.blankContentContainer.visibility = View.INVISIBLE
+                ThumbnailLoader.pauseListLoading()
+                homeSongAdapter.areCoverArtsRendered = false
+                librarySongAdapter.areCoverArtsRendered = false
+                playlistSongsAdapter.areCoverArtsRendered = false
+                playlistAdapter.areCoverArtsRendered = false
+            }
             .start()
 
         binding.playerBarWrapper.animate()
@@ -857,6 +868,14 @@ class MainActivity : AppCompatActivity() {
     private fun closeFullscreenPlayer() {
         if (!isFullscreenPlayerOpen) return
         isFullscreenPlayerOpen = false
+
+        // Restore list cover arts rendering and underlying views before slide-down
+        binding.blankContentContainer.visibility = View.VISIBLE
+        ThumbnailLoader.resumeListLoading()
+        homeSongAdapter.areCoverArtsRendered = true
+        librarySongAdapter.areCoverArtsRendered = true
+        playlistSongsAdapter.areCoverArtsRendered = true
+        playlistAdapter.areCoverArtsRendered = true
 
         binding.playerBarWrapper.visibility = View.VISIBLE
         binding.playerBarWrapper.animate()
@@ -875,6 +894,7 @@ class MainActivity : AppCompatActivity() {
             .setInterpolator(AccelerateDecelerateInterpolator())
             .withEndAction {
                 binding.fullPlayerContainer.visibility = View.GONE
+                binding.ivFullAlbumArt.setImageDrawable(null)
             }
             .start()
     }
@@ -884,7 +904,7 @@ class MainActivity : AppCompatActivity() {
         if (song != null) {
             binding.tvFullTitle.text = song.title
             binding.tvFullArtist.text = song.artist
-            ThumbnailLoader.loadThumbnail(binding.ivFullAlbumArt, song)
+            ThumbnailLoader.loadHighResArt(binding.ivFullAlbumArt, song)
             val duration = mediaPlayer?.duration?.takeIf { it > 0 } ?: song.durationMs.toInt()
             val currentPos = mediaPlayer?.currentPosition ?: 0
 
