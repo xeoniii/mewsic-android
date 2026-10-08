@@ -336,7 +336,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:scaleType="centerCrop"
-            android:alpha="0.45" />
+            android:alpha="0.58" />
 
         <!-- Deep Gradient Overlay for high-contrast text and controls -->
         <View
@@ -344,17 +344,6 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:background="@drawable/bg_player_blur_overlay" />
-
-        <!-- Top Ambient Halo Glow -->
-        <View
-            android:id="@+id/fullPlayerGlow"
-            android:layout_width="320dp"
-            android:layout_height="320dp"
-            android:alpha="0.6"
-            android:background="@drawable/bg_ambient_glow"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
 
         <!-- 1. Header Toolbar -->
         <FrameLayout

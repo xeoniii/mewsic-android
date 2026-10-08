@@ -243,7 +243,7 @@ object ThumbnailLoader {
                 ?: generateFallbackBitmap(song.artist, song.album, 256)
 
             val blurred = withContext(Dispatchers.Default) {
-                createBlurredBitmap(source, scale = 0.15f, radius = 22)
+                createBlurredBitmap(source, scale = 0.10f, radius = 28)
             }
 
             blurCache.put(song.id, blurred)
@@ -253,9 +253,9 @@ object ThumbnailLoader {
         }
     }
 
-    private fun createBlurredBitmap(src: Bitmap, scale: Float = 0.15f, radius: Int = 22): Bitmap {
-        val width = maxOf((src.width * scale).toInt(), 24)
-        val height = maxOf((src.height * scale).toInt(), 24)
+    private fun createBlurredBitmap(src: Bitmap, scale: Float = 0.10f, radius: Int = 28): Bitmap {
+        val width = maxOf((src.width * scale).toInt(), 16)
+        val height = maxOf((src.height * scale).toInt(), 16)
         val small = Bitmap.createScaledBitmap(src, width, height, true)
         return fastStackBlur(small, radius)
     }

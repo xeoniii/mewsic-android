@@ -928,28 +928,57 @@ class MainActivity : AppCompatActivity() {
 
         var lyricsTouchStartX = 0f
         var lyricsTouchStartY = 0f
+        var isLyricsDraggingDown = false
         binding.rvLyrics.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
             override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
                 when (e.action) {
                     MotionEvent.ACTION_DOWN -> {
-                        lyricsTouchStartX = e.x
-                        lyricsTouchStartY = e.y
+                        lyricsTouchStartX = e.rawX
+                        lyricsTouchStartY = e.rawY
+                        isLyricsDraggingDown = false
                     }
                     MotionEvent.ACTION_MOVE -> {
-                        val dx = e.x - lyricsTouchStartX
-                        val dy = e.y - lyricsTouchStartY
-                        if (dx > 90 && dx > Math.abs(dy) * 1.5) {
+                        val dx = e.rawX - lyricsTouchStartX
+                        val dy = e.rawY - lyricsTouchStartY
+                        if (dx > 80 && dx > Math.abs(dy) * 1.5) {
                             showCoverArtView()
                             return true
                         }
-                        // Swipe down at the top of lyrics -> close player
-                        if (dy > 90 && dy > Math.abs(dx) * 1.5 && !rv.canScrollVertically(-1)) {
-                            closeFullscreenPlayer()
+                        // Swipe down when at top of lyrics -> drag player down
+                        if (dy > 30 && dy > Math.abs(dx) * 1.3 && !rv.canScrollVertically(-1)) {
+                            isLyricsDraggingDown = true
+                            binding.blankContentContainer.visibility = View.VISIBLE
+                            binding.playerBarWrapper.visibility = View.VISIBLE
+                            binding.fullPlayerContainer.translationY = maxOf(0f, dy)
                             return true
                         }
                     }
                 }
                 return false
+            }
+
+            override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {
+                if (isLyricsDraggingDown) {
+                    when (e.action) {
+                        MotionEvent.ACTION_MOVE -> {
+                            val dy = maxOf(0f, e.rawY - lyricsTouchStartY)
+                            binding.fullPlayerContainer.translationY = dy
+                        }
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                            val dy = e.rawY - lyricsTouchStartY
+                            if (dy > 180) {
+                                closeFullscreenPlayer()
+                            } else {
+                                binding.fullPlayerContainer.animate()
+                                    .translationY(0f)
+                                    .setDuration(220)
+                                    .setInterpolator(DecelerateInterpolator(1.5f))
+                                    .start()
+                            }
+                            isLyricsDraggingDown = false
+                        }
+                    }
+                }
             }
         })
 
@@ -958,6 +987,11 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("ClickableViewAccessibility")
     private fun setupCardSwipeGesture() {
+        var startRawX = 0f
+        var startRawY = 0f
+        var isDraggingDown = false
+        var isHorizontalSwipe = false
+
         val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             private val SWIPE_THRESHOLD = 50
             private val SWIPE_VELOCITY_THRESHOLD = 80
@@ -980,12 +1014,9 @@ class MainActivity : AppCompatActivity() {
                         }
                         return true
                     }
-                } else {
-                    // Swipe down gesture to dismiss/close player
-                    if (diffY > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
-                        closeFullscreenPlayer()
-                        return true
-                    }
+                } else if (diffY > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
+                    closeFullscreenPlayer()
+                    return true
                 }
                 return false
             }
@@ -993,53 +1024,73 @@ class MainActivity : AppCompatActivity() {
             override fun onDown(e: MotionEvent): Boolean = true
         })
 
-        var startX = 0f
-        var startY = 0f
-
-        val cardTouchListener = View.OnTouchListener { _, event ->
+        val playerTouchListener = View.OnTouchListener { _, event ->
             gestureDetector.onTouchEvent(event)
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    startX = event.x
-                    startY = event.y
+                    startRawX = event.rawX
+                    startRawY = event.rawY
+                    isDraggingDown = false
+                    isHorizontalSwipe = false
+                    true
                 }
-                MotionEvent.ACTION_UP -> {
-                    val totalDx = event.x - startX
-                    val totalDy = event.y - startY
-                    if (Math.abs(totalDx) > Math.abs(totalDy) && Math.abs(totalDx) > 80) {
-                        if (totalDx < 0) {
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - startRawX
+                    val dy = event.rawY - startRawY
+
+                    if (!isDraggingDown && !isHorizontalSwipe) {
+                        if (dy > 20 && dy > Math.abs(dx) * 1.2) {
+                            isDraggingDown = true
+                            binding.blankContentContainer.visibility = View.VISIBLE
+                            binding.playerBarWrapper.visibility = View.VISIBLE
+                        } else if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy)) {
+                            isHorizontalSwipe = true
+                        }
+                    }
+
+                    if (isDraggingDown) {
+                        val currentY = maxOf(0f, dy)
+                        binding.fullPlayerContainer.translationY = currentY
+                        val slideDistance = binding.fullPlayerContainer.height.takeIf { it > 0 }?.toFloat()
+                            ?: resources.displayMetrics.heightPixels.toFloat()
+                        binding.playerBarWrapper.alpha = (currentY / slideDistance).coerceIn(0f, 1f)
+                        true
+                    } else {
+                        false
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    val dx = event.rawX - startRawX
+                    val dy = event.rawY - startRawY
+
+                    if (isDraggingDown) {
+                        if (dy > 180) {
+                            closeFullscreenPlayer()
+                        } else {
+                            binding.fullPlayerContainer.animate()
+                                .translationY(0f)
+                                .setDuration(220)
+                                .setInterpolator(DecelerateInterpolator(1.5f))
+                                .start()
+                            binding.playerBarWrapper.animate()
+                                .alpha(0f)
+                                .setDuration(180)
+                                .withEndAction {
+                                    binding.playerBarWrapper.visibility = View.INVISIBLE
+                                }
+                                .start()
+                        }
+                        isDraggingDown = false
+                        true
+                    } else if (isHorizontalSwipe || (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy))) {
+                        if (dx < 0) {
                             showLyricsView()
                         } else {
                             showCoverArtView()
                         }
-                    } else if (totalDy > 80 && totalDy > Math.abs(totalDx) * 1.2) {
-                        closeFullscreenPlayer()
-                    }
-                }
-            }
-            true
-        }
-
-        binding.cardFullAlbumArt.setOnTouchListener(cardTouchListener)
-        binding.ivFullAlbumArt.setOnTouchListener(cardTouchListener)
-        binding.layoutCoverSection.setOnTouchListener(cardTouchListener)
-        binding.layoutSongInfo.setOnTouchListener(cardTouchListener)
-        binding.layoutCardIndicators.setOnClickListener { toggleCoverOrLyrics() }
-
-        // Swipe down on top header to close player
-        var headerStartX = 0f
-        var headerStartY = 0f
-        binding.fullPlayerHeader.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    headerStartX = event.x
-                    headerStartY = event.y
-                    false
-                }
-                MotionEvent.ACTION_UP -> {
-                    val dy = event.y - headerStartY
-                    val dx = Math.abs(event.x - headerStartX)
-                    if (dy > 60 && dy > dx * 1.2) {
+                        isHorizontalSwipe = false
+                        true
+                    } else if (dy > 90 && dy > Math.abs(dx) * 1.2) {
                         closeFullscreenPlayer()
                         true
                     } else {
@@ -1049,6 +1100,13 @@ class MainActivity : AppCompatActivity() {
                 else -> false
             }
         }
+
+        binding.cardFullAlbumArt.setOnTouchListener(playerTouchListener)
+        binding.ivFullAlbumArt.setOnTouchListener(playerTouchListener)
+        binding.layoutCoverSection.setOnTouchListener(playerTouchListener)
+        binding.layoutSongInfo.setOnTouchListener(playerTouchListener)
+        binding.fullPlayerHeader.setOnTouchListener(playerTouchListener)
+        binding.layoutCardIndicators.setOnClickListener { toggleCoverOrLyrics() }
     }
 
     private fun seekRelative(deltaMs: Long) {
@@ -1229,11 +1287,13 @@ class MainActivity : AppCompatActivity() {
 
         syncFullscreenPlayerState()
 
-        val rootHeight = binding.rootContainer.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+        val slideDistance = binding.fullPlayerContainer.height.takeIf { it > 0 }?.toFloat()
+            ?: binding.rootContainer.height.takeIf { it > 0 }?.toFloat()
+            ?: resources.displayMetrics.heightPixels.toFloat()
 
         binding.fullPlayerContainer.visibility = View.VISIBLE
-        binding.fullPlayerContainer.translationY = rootHeight.toFloat()
-        binding.fullPlayerContainer.alpha = 0.6f
+        binding.fullPlayerContainer.translationY = slideDistance
+        binding.fullPlayerContainer.alpha = 1f
 
         binding.fullPlayerContainer.animate()
             .translationY(0f)
@@ -1282,15 +1342,18 @@ class MainActivity : AppCompatActivity() {
             .setDuration(260)
             .start()
 
-        val rootHeight = binding.rootContainer.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+        val slideDistance = binding.fullPlayerContainer.height.takeIf { it > 0 }?.toFloat()
+            ?: binding.rootContainer.height.takeIf { it > 0 }?.toFloat()
+            ?: resources.displayMetrics.heightPixels.toFloat()
 
         binding.fullPlayerContainer.animate()
-            .translationY(rootHeight.toFloat())
-            .alpha(0.6f)
-            .setDuration(280)
-            .setInterpolator(AccelerateDecelerateInterpolator())
+            .translationY(slideDistance)
+            .alpha(1f)
+            .setDuration(300)
+            .setInterpolator(DecelerateInterpolator(1.2f))
             .withEndAction {
                 binding.fullPlayerContainer.visibility = View.GONE
+                binding.fullPlayerContainer.translationY = 0f
                 binding.ivFullAlbumArt.setImageDrawable(null)
                 binding.ivFullPlayerBlurredBg.setImageDrawable(null)
                 showCoverArtView(animate = false)
