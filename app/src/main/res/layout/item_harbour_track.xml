@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/harbourTrackContainer"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="16dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginEnd="16dp"
+    android:layout_marginBottom="4dp"
+    android:background="@drawable/bg_song_card_idle"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="12dp">
+
+    <!-- Cover Art -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        app:cardBackgroundColor="@color/background_card"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="0dp"
+        app:strokeColor="#22FFFFFF"
+        app:strokeWidth="1dp">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <ImageView
+                android:id="@+id/ivHarbourCover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:src="@drawable/ic_album_art_placeholder" />
+
+            <!-- Download progress overlay on cover art -->
+            <FrameLayout
+                android:id="@+id/flDownloadOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#AA000000"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/tvDownloadPercent"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:fontFamily="sans-serif-black"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    tools:text="42%" />
+            </FrameLayout>
+
+        </FrameLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Title, Artist, Album, Badges -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvHarbourTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            tools:text="Blinding Lights" />
+
+        <TextView
+            android:id="@+id/tvHarbourArtistAlbum"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#8E9BAE"
+            android:textSize="11.5sp"
+            tools:text="The Weeknd · After Hours" />
+
+        <!-- Row: Duration pill + Lyrics badge -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <!-- Duration pill -->
+            <TextView
+                android:id="@+id/tvHarbourDuration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_song_card_idle"
+                android:fontFamily="monospace"
+                android:paddingStart="6dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="6dp"
+                android:paddingBottom="2dp"
+                android:textColor="#64748B"
+                android:textSize="10sp"
+                android:visibility="gone"
+                tools:text="3:26"
+                tools:visibility="visible" />
+
+            <!-- Lyrics available indicator -->
+            <TextView
+                android:id="@+id/tvHarbourLyricsBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_btn_apply"
+                android:fontFamily="sans-serif-black"
+                android:letterSpacing="0.06"
+                android:paddingStart="6dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="6dp"
+                android:paddingBottom="2dp"
+                android:text="LYRICS"
+                android:textColor="@color/tab_active_tint"
+                android:textSize="9sp"
+                android:visibility="gone" />
+
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Stream / Preview Button -->
+    <FrameLayout
+        android:id="@+id/btnHarbourStream"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/bg_control_button_ripple"
+        android:clickable="true"
+        android:focusable="true"
+        android:contentDescription="Stream track">
+
+        <ImageView
+            android:id="@+id/ivHarbourStreamIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_player_play"
+            app:tint="#8E9BAE" />
+    </FrameLayout>
+
+    <!-- Download Button -->
+    <FrameLayout
+        android:id="@+id/btnHarbourDownload"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="4dp"
+        android:background="@drawable/bg_control_button_ripple"
+        android:clickable="true"
+        android:focusable="true"
+        android:contentDescription="Download track">
+
+        <ImageView
+            android:id="@+id/ivHarbourDownloadIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_download"
+            app:tint="#8E9BAE" />
+    </FrameLayout>
+
+</LinearLayout>

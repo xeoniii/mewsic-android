@@ -13,7 +13,9 @@ data class Song(
     val dateAdded: Long,
     val dateModified: Long,
     val size: Long,
-    val contentUri: Uri
+    val contentUri: Uri,
+    val year: Int = 0,
+    val genre: String = ""
 ) {
     val durationFormatted: String
         get() {

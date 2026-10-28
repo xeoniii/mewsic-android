@@ -41,7 +41,9 @@ object LibraryCache {
                         dateAdded = obj.optLong("dateAdded", 0L),
                         dateModified = obj.optLong("dateModified", 0L),
                         size = obj.optLong("size", 0L),
-                        contentUri = contentUri
+                        contentUri = contentUri,
+                        year = obj.optInt("year", 0),
+                        genre = obj.optString("genre", "")
                     )
                 )
             }
@@ -69,6 +71,8 @@ object LibraryCache {
                     put("dateAdded", song.dateAdded)
                     put("dateModified", song.dateModified)
                     put("size", song.size)
+                    put("year", song.year)
+                    put("genre", song.genre)
                 }
                 array.put(obj)
             }

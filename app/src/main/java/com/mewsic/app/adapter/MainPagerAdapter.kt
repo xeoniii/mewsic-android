@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleOwner
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.slider.Slider
@@ -16,6 +17,7 @@ import com.mewsic.app.databinding.PageHomeBinding
 import com.mewsic.app.databinding.PageLibraryBinding
 import com.mewsic.app.databinding.PagePlaylistBinding
 import com.mewsic.app.databinding.PageSettingsBinding
+import com.mewsic.app.harbour.HarbourController
 import com.mewsic.app.model.Song
 import com.mewsic.app.scanner.LibraryStats
 import com.mewsic.app.scanner.ThumbnailLoader
@@ -30,7 +32,9 @@ class MainPagerAdapter(
     private val onScaleChanged: (scale: Float) -> Unit,
     private val onRescanClicked: () -> Unit,
     private val onCreatePlaylistClicked: () -> Unit,
-    private val onPlayAllPlaylistClicked: (playlistName: String) -> Unit
+    private val onPlayAllPlaylistClicked: (playlistName: String) -> Unit,
+    private val lifecycleOwner: LifecycleOwner,
+    private val onSilentRescan: () -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     companion object {
@@ -50,6 +54,10 @@ class MainPagerAdapter(
     private var playlistViewHolder: PlaylistViewHolder? = null
     private var settingsViewHolder: SettingsViewHolder? = null
 
+    var onAddSongsToPlaylistClicked: ((playlistName: String) -> Unit)? = null
+    var onRenamePlaylistClicked: ((playlistName: String) -> Unit)? = null
+    var onDeletePlaylistClicked: ((playlistName: String) -> Unit)? = null
+
     fun updateData(stats: LibraryStats?, count: Int) {
         currentStats = stats
         totalTrackCount = count
@@ -59,8 +67,8 @@ class MainPagerAdapter(
         settingsViewHolder?.bind(totalTrackCount)
     }
 
-    fun openPlaylistDetail(playlistName: String, songsCount: Int, firstSong: Song? = null) {
-        playlistViewHolder?.showDetail(playlistName, songsCount, firstSong)
+    fun openPlaylistDetail(playlistName: String, songsCount: Int, firstSong: Song? = null, totalDurationFormatted: String = "") {
+        playlistViewHolder?.showDetail(playlistName, songsCount, firstSong, totalDurationFormatted)
     }
 
     fun closePlaylistDetail(): Boolean {
@@ -116,7 +124,7 @@ class MainPagerAdapter(
                 holder.bind(currentStats, hasSongs)
             }
             is HarbourViewHolder -> {
-                // Static Coming Soon layout
+                holder.init()
             }
             is LibraryViewHolder -> {
                 libraryViewHolder = holder
@@ -175,7 +183,25 @@ class MainPagerAdapter(
 
     inner class HarbourViewHolder(
         val binding: PageHarbourBinding
-    ) : RecyclerView.ViewHolder(binding.root)
+    ) : RecyclerView.ViewHolder(binding.root) {
+
+        private var controller: HarbourController? = null
+
+        fun init() {
+            if (controller == null) {
+                controller = HarbourController(
+                    binding         = binding,
+                    lifecycleOwner  = lifecycleOwner,
+                    onSilentRescan  = onSilentRescan
+                ).also { it.attach() }
+            }
+        }
+
+        fun release() {
+            controller?.detach()
+            controller = null
+        }
+    }
 
     inner class LibraryViewHolder(
         val binding: PageLibraryBinding
@@ -229,14 +255,27 @@ class MainPagerAdapter(
             binding.btnPlaylistPlayAll.setOnClickListener {
                 activePlaylistName?.let { onPlayAllPlaylistClicked(it) }
             }
+
+            binding.btnPlaylistAddTracks.setOnClickListener {
+                activePlaylistName?.let { onAddSongsToPlaylistClicked?.invoke(it) }
+            }
+
+            binding.btnDetailPlaylistRename.setOnClickListener {
+                activePlaylistName?.let { onRenamePlaylistClicked?.invoke(it) }
+            }
+
+            binding.btnDetailPlaylistDelete.setOnClickListener {
+                activePlaylistName?.let { onDeletePlaylistClicked?.invoke(it) }
+            }
         }
 
-        fun showDetail(playlistName: String, songsCount: Int, firstSong: Song? = null) {
+        fun showDetail(playlistName: String, songsCount: Int, firstSong: Song? = null, totalDurationFormatted: String = "") {
             activePlaylistName = playlistName
             binding.layoutPlaylistsOverview.visibility = View.GONE
             binding.layoutPlaylistDetail.visibility = View.VISIBLE
             binding.tvDetailPlaylistName.text = playlistName
-            binding.tvDetailPlaylistCount.text = "$songsCount ${if (songsCount == 1) "track" else "tracks"}"
+            val countStr = "$songsCount ${if (songsCount == 1) "track" else "tracks"}"
+            binding.tvDetailPlaylistCount.text = if (totalDurationFormatted.isNotBlank()) "$countStr · $totalDurationFormatted" else countStr
 
             if (firstSong != null) {
                 binding.ivDetailPlaylistCover.scaleType = ImageView.ScaleType.CENTER_CROP

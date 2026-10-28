@@ -33,13 +33,20 @@ object LyricsExtractor {
 
         var rawLyrics: String? = null
 
-        // 1. Try sidecar .lrc or .txt file in the same directory as the song
+        // 1. Try sidecar .lrc or .txt file in the same directory as the song, or internal app lyrics cache
         if (song.filePath.isNotBlank()) {
             try {
                 val base = song.filePath.substringBeforeLast('.')
                 val lrcFile = File("$base.lrc")
                 if (lrcFile.exists() && lrcFile.isFile && lrcFile.length() > 0) {
                     rawLyrics = lrcFile.readText(Charsets.UTF_8)
+                }
+                if (rawLyrics.isNullOrBlank()) {
+                    val name = File(song.filePath).nameWithoutExtension
+                    val internalLrc = File(context.filesDir, "lyrics/$name.lrc")
+                    if (internalLrc.exists() && internalLrc.isFile && internalLrc.length() > 0) {
+                        rawLyrics = internalLrc.readText(Charsets.UTF_8)
+                    }
                 }
                 if (rawLyrics.isNullOrBlank()) {
                     val txtFile = File("$base.txt")
@@ -87,6 +94,84 @@ object LyricsExtractor {
         }
 
         result
+    }
+
+    suspend fun getRawLyrics(context: Context, song: Song): String? = withContext(Dispatchers.IO) {
+        var rawLyrics: String? = null
+
+        // 1. Try sidecar .lrc or .txt file in the same directory as the song, or internal app lyrics cache
+        if (song.filePath.isNotBlank()) {
+            try {
+                val base = song.filePath.substringBeforeLast('.')
+                val lrcFile = File("$base.lrc")
+                if (lrcFile.exists() && lrcFile.isFile && lrcFile.length() > 0) {
+                    rawLyrics = lrcFile.readText(Charsets.UTF_8)
+                }
+                if (rawLyrics.isNullOrBlank()) {
+                    val name = File(song.filePath).nameWithoutExtension
+                    val internalLrc = File(context.filesDir, "lyrics/$name.lrc")
+                    if (internalLrc.exists() && internalLrc.isFile && internalLrc.length() > 0) {
+                        rawLyrics = internalLrc.readText(Charsets.UTF_8)
+                    }
+                }
+                if (rawLyrics.isNullOrBlank()) {
+                    val txtFile = File("$base.txt")
+                    if (txtFile.exists() && txtFile.isFile && txtFile.length() > 0) {
+                        rawLyrics = txtFile.readText(Charsets.UTF_8)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        // 2. Try parsing embedded lyrics directly from the audio file
+        if (rawLyrics.isNullOrBlank() && song.filePath.isNotBlank()) {
+            try {
+                val file = File(song.filePath)
+                if (file.exists() && file.isFile) {
+                    val extracted = extractFromFile(file)
+                    if (!extracted.isNullOrBlank()) {
+                        rawLyrics = extracted
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        // 3. Try reading stream via contentResolver for scoped storage URIs
+        if (rawLyrics.isNullOrBlank()) {
+            try {
+                context.contentResolver.openInputStream(song.contentUri)?.use { stream ->
+                    val extracted = extractFromStream(stream)
+                    if (!extracted.isNullOrBlank()) {
+                        rawLyrics = extracted
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        rawLyrics
+    }
+
+    fun invalidateCache(songId: Long) {
+        synchronized(lyricsCache) {
+            lyricsCache.remove(songId)
+        }
+    }
+
+    fun saveLyrics(context: Context, song: Song, rawLyrics: String) {
+        invalidateCache(song.id)
+        try {
+            if (song.filePath.isNotBlank()) {
+                val base = song.filePath.substringBeforeLast('.')
+                val lrcFile = File("$base.lrc")
+                lrcFile.writeText(rawLyrics, Charsets.UTF_8)
+            }
+        } catch (_: Exception) {}
+        try {
+            val dir = File(context.filesDir, "lyrics").apply { mkdirs() }
+            val name = if (song.filePath.isNotBlank()) File(song.filePath).nameWithoutExtension else "song_${song.id}"
+            val internalLrc = File(dir, "$name.lrc")
+            internalLrc.writeText(rawLyrics, Charsets.UTF_8)
+        } catch (_: Exception) {}
     }
 
     suspend fun getLyrics(context: Context, song: Song): String? {

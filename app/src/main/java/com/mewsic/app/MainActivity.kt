@@ -40,15 +40,22 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.mewsic.app.adapter.AddToPlaylistAdapter
 import com.mewsic.app.adapter.LyricsAdapter
 import com.mewsic.app.adapter.MainPagerAdapter
 import com.mewsic.app.adapter.PlaylistAdapter
+import com.mewsic.app.adapter.QueueAdapter
 import com.mewsic.app.adapter.SongAdapter
 import com.mewsic.app.databinding.ActivityMainBinding
+import com.mewsic.app.databinding.DialogAddToPlaylistBinding
+import com.mewsic.app.databinding.DialogBottomSheetQueueBinding
 import com.mewsic.app.databinding.DialogBottomSheetSongOptionsBinding
+import com.mewsic.app.databinding.DialogCreatePlaylistBinding
 import com.mewsic.app.databinding.DialogEditSongBinding
+import com.mewsic.app.databinding.DialogSelectSongsForPlaylistBinding
 import com.mewsic.app.model.Song
 import com.mewsic.app.scanner.LibraryCache
 import com.mewsic.app.scanner.MediaScanner
@@ -59,13 +66,28 @@ import com.mewsic.app.service.MusicPlaybackController
 import com.mewsic.app.service.MusicPlaybackService
 import com.mewsic.app.util.UiScaleManager
 import android.annotation.SuppressLint
+import android.content.ContentValues
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.provider.MediaStore
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.GestureDetector
 import android.view.MotionEvent
+import com.mewsic.app.harbour.AudioTagEmbedder
+import com.mewsic.app.harbour.HarbourLyricsService
+import com.mewsic.app.harbour.HarbourSearchEngine
 import com.mewsic.app.scanner.LyricsExtractor
 import com.mewsic.app.scanner.LyricsData
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 
 class MainActivity : AppCompatActivity() {
 
@@ -79,11 +101,18 @@ class MainActivity : AppCompatActivity() {
     private var loadAnimator: ObjectAnimator? = null
     private val argbEvaluator = ArgbEvaluator()
 
+    private var onImagePickedCallback: ((Uri) -> Unit)? = null
+    private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let { onImagePickedCallback?.invoke(it) }
+    }
+
     enum class RepeatMode { OFF, ALL, ONE }
 
     // Audio Playback State
     private var isPlaying = false
     private var currentPlayingSong: Song? = null
+    private val playbackQueue = mutableListOf<Song>()
+    private var currentQueueIndex = -1
     private var mediaPlayer: MediaPlayer? = null
     private var progressTrackingJob: Job? = null
     private var currentSongToken = 0L
@@ -127,14 +156,14 @@ class MainActivity : AppCompatActivity() {
 
     private val homeSongAdapter by lazy {
         SongAdapter(
-            onSongClicked = { song, _ -> playSong(song) },
+            onSongClicked = { song, _ -> playSong(song, recentSongs) },
             onSongLongClicked = { song, _ -> showSongOptions(song) }
         )
     }
 
     private val librarySongAdapter by lazy {
         SongAdapter(
-            onSongClicked = { song, _ -> playSong(song) },
+            onSongClicked = { song, _ -> playSong(song, allSongs) },
             onSongLongClicked = { song, _ -> showSongOptions(song) }
         )
     }
@@ -152,7 +181,7 @@ class MainActivity : AppCompatActivity() {
 
     private val playlistSongsAdapter by lazy {
         SongAdapter(
-            onSongClicked = { song, _ -> playSong(song) },
+            onSongClicked = { song, _ -> playSong(song, currentPlaylistSongs) },
             onSongLongClicked = { song, _ -> showSongOptions(song, inPlaylist = currentOpenPlaylist) }
         )
     }
@@ -177,8 +206,20 @@ class MainActivity : AppCompatActivity() {
             },
             onPlayAllPlaylistClicked = { playlistName ->
                 playAllPlaylist(playlistName)
+            },
+            lifecycleOwner  = this,
+            onSilentRescan  = { silentBackgroundScan() }
+        ).apply {
+            onAddSongsToPlaylistClicked = { playlistName ->
+                showAddSongsToPlaylistDialog(playlistName)
             }
-        )
+            onRenamePlaylistClicked = { playlistName ->
+                showRenamePlaylistDialog(playlistName)
+            }
+            onDeletePlaylistClicked = { playlistName ->
+                showDeletePlaylistDialog(playlistName)
+            }
+        }
     }
 
     // Permission launcher for reading audio files on device
@@ -496,8 +537,31 @@ class MainActivity : AppCompatActivity() {
         loadPlaylists()
     }
 
-    private fun playSong(song: Song) {
+    private fun playSong(song: Song, newQueue: List<Song>? = null) {
         currentPlayingSong = song
+        if (newQueue != null) {
+            playbackQueue.clear()
+            playbackQueue.addAll(newQueue)
+            val idx = playbackQueue.indexOfFirst { it.id == song.id }
+            currentQueueIndex = if (idx != -1) idx else {
+                playbackQueue.add(0, song)
+                0
+            }
+        } else {
+            val idx = playbackQueue.indexOfFirst { it.id == song.id }
+            if (idx != -1) {
+                currentQueueIndex = idx
+            } else {
+                if (currentQueueIndex in 0 until playbackQueue.size) {
+                    playbackQueue.add(currentQueueIndex + 1, song)
+                    currentQueueIndex++
+                } else {
+                    playbackQueue.add(song)
+                    currentQueueIndex = playbackQueue.size - 1
+                }
+            }
+        }
+
         homeSongAdapter.activeSongId = song.id
         librarySongAdapter.activeSongId = song.id
         playlistSongsAdapter.activeSongId = song.id
@@ -621,25 +685,31 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun playNextSong(fromCompletion: Boolean = false) {
-        val list = when (binding.viewPager.currentItem) {
-            MainPagerAdapter.PAGE_HOME -> recentSongs
-            MainPagerAdapter.PAGE_PLAYLIST -> if (currentPlaylistSongs.isNotEmpty()) currentPlaylistSongs else allSongs
-            else -> allSongs
+        if (playbackQueue.isEmpty()) {
+            val list = when (binding.viewPager.currentItem) {
+                MainPagerAdapter.PAGE_HOME -> recentSongs
+                MainPagerAdapter.PAGE_PLAYLIST -> if (currentPlaylistSongs.isNotEmpty()) currentPlaylistSongs else allSongs
+                else -> allSongs
+            }
+            if (list.isEmpty()) return
+            playbackQueue.addAll(list)
+            val idx = playbackQueue.indexOfFirst { it.id == currentPlayingSong?.id }
+            currentQueueIndex = if (idx != -1) idx else 0
         }
-        if (list.isEmpty()) return
 
-        val idx = list.indexOfFirst { it.id == currentPlayingSong?.id }
+        if (playbackQueue.isEmpty()) return
 
-        if (isShuffle && list.size > 1) {
+        if (isShuffle && playbackQueue.size > 1) {
             var randIdx: Int
             do {
-                randIdx = (0 until list.size).random()
-            } while (randIdx == idx)
-            playSong(list[randIdx])
+                randIdx = (0 until playbackQueue.size).random()
+            } while (randIdx == currentQueueIndex && playbackQueue.size > 1)
+            currentQueueIndex = randIdx
+            playSong(playbackQueue[currentQueueIndex])
             return
         }
 
-        if (idx == list.size - 1 && repeatMode == RepeatMode.OFF && fromCompletion) {
+        if (currentQueueIndex == playbackQueue.size - 1 && repeatMode == RepeatMode.OFF && fromCompletion) {
             // Reached end of playback queue with repeat off
             isPlaying = false
             binding.ivPlayPauseIcon.setImageResource(R.drawable.ic_player_play)
@@ -657,8 +727,9 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val nextIdx = if (idx in 0 until list.size - 1) idx + 1 else 0
-        playSong(list[nextIdx])
+        val nextIdx = if (currentQueueIndex in 0 until playbackQueue.size - 1) currentQueueIndex + 1 else 0
+        currentQueueIndex = nextIdx
+        playSong(playbackQueue[currentQueueIndex])
     }
 
     private fun playPrevSong() {
@@ -679,15 +750,192 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val list = when (binding.viewPager.currentItem) {
-            MainPagerAdapter.PAGE_HOME -> recentSongs
-            MainPagerAdapter.PAGE_PLAYLIST -> if (currentPlaylistSongs.isNotEmpty()) currentPlaylistSongs else allSongs
-            else -> allSongs
+        if (playbackQueue.isEmpty()) {
+            val list = when (binding.viewPager.currentItem) {
+                MainPagerAdapter.PAGE_HOME -> recentSongs
+                MainPagerAdapter.PAGE_PLAYLIST -> if (currentPlaylistSongs.isNotEmpty()) currentPlaylistSongs else allSongs
+                else -> allSongs
+            }
+            if (list.isEmpty()) return
+            playbackQueue.addAll(list)
+            val idx = playbackQueue.indexOfFirst { it.id == currentPlayingSong?.id }
+            currentQueueIndex = if (idx != -1) idx else 0
         }
-        if (list.isEmpty()) return
-        val idx = list.indexOfFirst { it.id == currentPlayingSong?.id }
-        val prevIdx = if (idx > 0) idx - 1 else list.size - 1
-        playSong(list[prevIdx])
+
+        if (playbackQueue.isEmpty()) return
+        val prevIdx = if (currentQueueIndex > 0) currentQueueIndex - 1 else playbackQueue.size - 1
+        currentQueueIndex = prevIdx
+        playSong(playbackQueue[currentQueueIndex])
+    }
+
+    private fun addSongToPlayNext(song: Song) {
+        if (playbackQueue.isEmpty() || currentPlayingSong == null) {
+            playSong(song)
+            Toast.makeText(this, "Playing now: ${song.title}", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val insertPos = (currentQueueIndex + 1).coerceIn(0, playbackQueue.size)
+        playbackQueue.add(insertPos, song)
+        window.decorView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        Toast.makeText(this, "Will play next: ${song.title}", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun addSongToEndOfQueue(song: Song) {
+        if (playbackQueue.isEmpty() || currentPlayingSong == null) {
+            playSong(song)
+            Toast.makeText(this, "Playing now: ${song.title}", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        playbackQueue.add(song)
+        window.decorView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        Toast.makeText(this, "Added to queue: ${song.title}", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showQueueBottomSheet() {
+        window.decorView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+
+        val bottomSheetDialog = BottomSheetDialog(this, R.style.BottomSheetDialogTheme)
+        val queueBinding = DialogBottomSheetQueueBinding.inflate(layoutInflater)
+        bottomSheetDialog.setContentView(queueBinding.root)
+
+        bottomSheetDialog.behavior.peekHeight = (resources.displayMetrics.heightPixels * 0.70).toInt()
+
+        // Helper to refresh header counts & Now Playing card
+        fun refreshQueueHeader() {
+            val upcoming = if (currentQueueIndex in 0 until playbackQueue.size - 1) {
+                playbackQueue.subList(currentQueueIndex + 1, playbackQueue.size)
+            } else emptyList()
+
+            val totalUpcomingMs = upcoming.sumOf { it.durationMs }
+            val formattedDur = formatTimeMs(totalUpcomingMs)
+            queueBinding.tvQueueCountDuration.text = "${upcoming.size} tracks · $formattedDur"
+
+            val current = currentPlayingSong
+            if (current != null) {
+                queueBinding.tvNowPlayingSectionLabel.visibility = View.VISIBLE
+                queueBinding.cardNowPlaying.visibility = View.VISIBLE
+                queueBinding.tvNowPlayingTitle.text = current.title
+                queueBinding.tvNowPlayingArtist.text = current.artist
+                queueBinding.tvNowPlayingDuration.text = current.durationFormatted
+                ThumbnailLoader.loadThumbnail(queueBinding.ivNowPlayingArt, current)
+            } else {
+                queueBinding.tvNowPlayingSectionLabel.visibility = View.GONE
+                queueBinding.cardNowPlaying.visibility = View.GONE
+            }
+
+            if (upcoming.isEmpty()) {
+                queueBinding.layoutQueueEmpty.visibility = View.VISIBLE
+                queueBinding.rvQueueTracks.visibility = View.GONE
+                queueBinding.btnQueueClear.visibility = View.GONE
+            } else {
+                queueBinding.layoutQueueEmpty.visibility = View.GONE
+                queueBinding.rvQueueTracks.visibility = View.VISIBLE
+                queueBinding.btnQueueClear.visibility = View.VISIBLE
+            }
+        }
+
+        val upcomingList = if (currentQueueIndex in 0 until playbackQueue.size - 1) {
+            playbackQueue.subList(currentQueueIndex + 1, playbackQueue.size).toMutableList()
+        } else mutableListOf()
+
+        lateinit var itemTouchHelper: ItemTouchHelper
+
+        val queueAdapter = QueueAdapter(
+            queueList = upcomingList,
+            onSongClicked = { pos, _ ->
+                val realIdx = currentQueueIndex + 1 + pos
+                if (realIdx in 0 until playbackQueue.size) {
+                    currentQueueIndex = realIdx
+                    playSong(playbackQueue[currentQueueIndex])
+                    bottomSheetDialog.dismiss()
+                }
+            },
+            onRemoveClicked = { pos, _ ->
+                val realIdx = currentQueueIndex + 1 + pos
+                if (realIdx in 0 until playbackQueue.size) {
+                    playbackQueue.removeAt(realIdx)
+                }
+                upcomingList.removeAt(pos)
+                queueBinding.rvQueueTracks.adapter?.notifyItemRemoved(pos)
+                refreshQueueHeader()
+            },
+            onStartDrag = { viewHolder ->
+                itemTouchHelper.startDrag(viewHolder)
+            },
+            onQueueChanged = {
+                if (currentQueueIndex in 0 until playbackQueue.size) {
+                    val head = playbackQueue.subList(0, currentQueueIndex + 1).toList()
+                    playbackQueue.clear()
+                    playbackQueue.addAll(head)
+                    playbackQueue.addAll(upcomingList)
+                }
+                refreshQueueHeader()
+            }
+        )
+
+        val touchHelperCallback = object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN,
+            ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
+        ) {
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean {
+                val from = viewHolder.bindingAdapterPosition
+                val to = target.bindingAdapterPosition
+                if (from != RecyclerView.NO_POSITION && to != RecyclerView.NO_POSITION) {
+                    queueAdapter.moveItem(from, to)
+                    return true
+                }
+                return false
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                val pos = viewHolder.bindingAdapterPosition
+                if (pos != RecyclerView.NO_POSITION) {
+                    val realIdx = currentQueueIndex + 1 + pos
+                    if (realIdx in 0 until playbackQueue.size) {
+                        playbackQueue.removeAt(realIdx)
+                    }
+                    queueAdapter.removeItem(pos)
+                    refreshQueueHeader()
+                }
+            }
+        }
+
+        itemTouchHelper = ItemTouchHelper(touchHelperCallback)
+        itemTouchHelper.attachToRecyclerView(queueBinding.rvQueueTracks)
+
+        queueBinding.rvQueueTracks.layoutManager = LinearLayoutManager(this)
+        queueBinding.rvQueueTracks.adapter = queueAdapter
+
+        queueBinding.btnQueueClear.setOnClickListener {
+            if (currentQueueIndex in 0 until playbackQueue.size) {
+                val head = playbackQueue.subList(0, currentQueueIndex + 1).toList()
+                playbackQueue.clear()
+                playbackQueue.addAll(head)
+            } else {
+                playbackQueue.clear()
+            }
+            upcomingList.clear()
+            queueAdapter.notifyDataSetChanged()
+            refreshQueueHeader()
+            Toast.makeText(this, "Upcoming queue cleared", Toast.LENGTH_SHORT).show()
+        }
+
+        queueBinding.btnQueueClose.setOnClickListener {
+            bottomSheetDialog.dismiss()
+        }
+
+        queueBinding.cardNowPlaying.setOnClickListener {
+            bottomSheetDialog.dismiss()
+        }
+
+        refreshQueueHeader()
+        bottomSheetDialog.show()
     }
 
     private fun startProgressTracking() {
@@ -973,6 +1221,10 @@ class MainActivity : AppCompatActivity() {
             toggleRepeat()
         }
 
+        binding.btnFullPlayerQueue.setOnClickListener {
+            showQueueBottomSheet()
+        }
+
         binding.btnFullPlayerMore.setOnClickListener {
             currentPlayingSong?.let { song ->
                 showSongOptions(song, inPlaylist = currentOpenPlaylist)
@@ -1023,61 +1275,117 @@ class MainActivity : AppCompatActivity() {
 
         var lyricsTouchStartX = 0f
         var lyricsTouchStartY = 0f
-        var isLyricsDraggingDown = false
         binding.rvLyrics.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
             override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
                 when (e.action) {
                     MotionEvent.ACTION_DOWN -> {
                         lyricsTouchStartX = e.rawX
                         lyricsTouchStartY = e.rawY
-                        isLyricsDraggingDown = false
                     }
                     MotionEvent.ACTION_MOVE -> {
                         val dx = e.rawX - lyricsTouchStartX
                         val dy = e.rawY - lyricsTouchStartY
-                        if (dx > 80 && dx > Math.abs(dy) * 1.5) {
+                        // Swipe down when at top of lyrics -> return to cover art!
+                        if (dy > 45 && dy > Math.abs(dx) * 1.3 && !rv.canScrollVertically(-1)) {
                             showCoverArtView()
                             return true
                         }
-                        // Swipe down when at top of lyrics -> drag player down
-                        if (dy > 30 && dy > Math.abs(dx) * 1.3 && !rv.canScrollVertically(-1)) {
-                            isLyricsDraggingDown = true
-                            binding.blankContentContainer.visibility = View.VISIBLE
-                            binding.playerBarWrapper.visibility = View.VISIBLE
-                            binding.fullPlayerContainer.translationY = maxOf(0f, dy)
+                        // Swipe left for next song, right for prev song while in lyrics
+                        if (Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+                            if (dx < 0) {
+                                swipeToNextSong()
+                            } else {
+                                swipeToPrevSong()
+                            }
                             return true
                         }
                     }
                 }
                 return false
             }
-
-            override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {
-                if (isLyricsDraggingDown) {
-                    when (e.action) {
-                        MotionEvent.ACTION_MOVE -> {
-                            val dy = maxOf(0f, e.rawY - lyricsTouchStartY)
-                            binding.fullPlayerContainer.translationY = dy
-                        }
-                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                            val dy = e.rawY - lyricsTouchStartY
-                            if (dy > 180) {
-                                closeFullscreenPlayer()
-                            } else {
-                                binding.fullPlayerContainer.animate()
-                                    .translationY(0f)
-                                    .setDuration(220)
-                                    .setInterpolator(DecelerateInterpolator(1.5f))
-                                    .start()
-                            }
-                            isLyricsDraggingDown = false
-                        }
-                    }
-                }
-            }
         })
 
         setupCardSwipeGesture()
+    }
+
+    private fun swipeToNextSong() {
+        val width = binding.cardFullAlbumArt.width.takeIf { it > 0 }?.toFloat() ?: 600f
+        window.decorView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+
+        if (!isShowingLyrics) {
+            binding.cardFullAlbumArt.animate()
+                .translationX(-width * 0.6f)
+                .alpha(0f)
+                .setDuration(160)
+                .withEndAction {
+                    playNextSong()
+                    binding.cardFullAlbumArt.translationX = width * 0.6f
+                    binding.cardFullAlbumArt.animate()
+                        .translationX(0f)
+                        .alpha(1f)
+                        .setDuration(220)
+                        .setInterpolator(DecelerateInterpolator(1.4f))
+                        .start()
+                }
+                .start()
+
+            binding.layoutSongInfo.animate()
+                .translationX(-width * 0.25f)
+                .alpha(0f)
+                .setDuration(160)
+                .withEndAction {
+                    binding.layoutSongInfo.translationX = width * 0.25f
+                    binding.layoutSongInfo.animate()
+                        .translationX(0f)
+                        .alpha(1f)
+                        .setDuration(220)
+                        .setInterpolator(DecelerateInterpolator(1.4f))
+                        .start()
+                }
+                .start()
+        } else {
+            playNextSong()
+        }
+    }
+
+    private fun swipeToPrevSong() {
+        val width = binding.cardFullAlbumArt.width.takeIf { it > 0 }?.toFloat() ?: 600f
+        window.decorView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+
+        if (!isShowingLyrics) {
+            binding.cardFullAlbumArt.animate()
+                .translationX(width * 0.6f)
+                .alpha(0f)
+                .setDuration(160)
+                .withEndAction {
+                    playPrevSong()
+                    binding.cardFullAlbumArt.translationX = -width * 0.6f
+                    binding.cardFullAlbumArt.animate()
+                        .translationX(0f)
+                        .alpha(1f)
+                        .setDuration(220)
+                        .setInterpolator(DecelerateInterpolator(1.4f))
+                        .start()
+                }
+                .start()
+
+            binding.layoutSongInfo.animate()
+                .translationX(width * 0.25f)
+                .alpha(0f)
+                .setDuration(160)
+                .withEndAction {
+                    binding.layoutSongInfo.translationX = -width * 0.25f
+                    binding.layoutSongInfo.animate()
+                        .translationX(0f)
+                        .alpha(1f)
+                        .setDuration(220)
+                        .setInterpolator(DecelerateInterpolator(1.4f))
+                        .start()
+                }
+                .start()
+        } else {
+            playPrevSong()
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -1085,11 +1393,14 @@ class MainActivity : AppCompatActivity() {
         var startRawX = 0f
         var startRawY = 0f
         var isDraggingDown = false
+        var isDraggingUp = false
         var isHorizontalSwipe = false
+        var wasShowingLyricsOnDown = false
+        var flingHandled = false
 
         val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            private val SWIPE_THRESHOLD = 50
-            private val SWIPE_VELOCITY_THRESHOLD = 80
+            private val SWIPE_THRESHOLD = 40
+            private val SWIPE_VELOCITY_THRESHOLD = 70
 
             override fun onFling(
                 e1: MotionEvent?,
@@ -1098,21 +1409,43 @@ class MainActivity : AppCompatActivity() {
                 velocityY: Float
             ): Boolean {
                 if (e1 == null) return false
-                val diffX = e2.x - e1.x
-                val diffY = e2.y - e1.y
+                val diffX = e2.rawX - e1.rawX
+                val diffY = e2.rawY - e1.rawY
+
                 if (Math.abs(diffX) > Math.abs(diffY)) {
+                    // Horizontal swipe: left for next song, right for previous song
                     if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
-                        if (!isShowingLyrics && diffX < 0) {
-                            showLyricsView()
+                        flingHandled = true
+                        if (diffX < 0) {
+                            swipeToNextSong()
                             return true
-                        } else if (isShowingLyrics && diffX > 0) {
-                            showCoverArtView()
+                        } else {
+                            swipeToPrevSong()
                             return true
                         }
                     }
-                } else if (diffY > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
-                    closeFullscreenPlayer()
-                    return true
+                } else if (Math.abs(diffY) > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
+                    if (diffY < 0) {
+                        // Swipe up -> open lyrics (only if not already showing lyrics)
+                        if (!isShowingLyrics && !wasShowingLyricsOnDown) {
+                            flingHandled = true
+                            showLyricsView()
+                            return true
+                        }
+                    } else {
+                        // Swipe down
+                        flingHandled = true
+                        if (isShowingLyrics || wasShowingLyricsOnDown) {
+                            // If currently showing lyrics or gesture started on lyrics (even if empty lyrics),
+                            // swiping down MUST ONLY return to cover art, NEVER exit fullscreen player!
+                            showCoverArtView()
+                            return true
+                        } else {
+                            // Only close fullscreen player if gesture was completely on cover art view
+                            closeFullscreenPlayer()
+                            return true
+                        }
+                    }
                 }
                 return false
             }
@@ -1121,34 +1454,70 @@ class MainActivity : AppCompatActivity() {
         })
 
         val playerTouchListener = View.OnTouchListener { _, event ->
+            if (event.action == MotionEvent.ACTION_DOWN) {
+                flingHandled = false
+                wasShowingLyricsOnDown = isShowingLyrics
+                startRawX = event.rawX
+                startRawY = event.rawY
+                isDraggingDown = false
+                isDraggingUp = false
+                isHorizontalSwipe = false
+                gestureDetector.onTouchEvent(event)
+                return@OnTouchListener true
+            }
+
             gestureDetector.onTouchEvent(event)
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    startRawX = event.rawX
-                    startRawY = event.rawY
+
+            if (flingHandled) {
+                if (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_CANCEL) {
                     isDraggingDown = false
+                    isDraggingUp = false
                     isHorizontalSwipe = false
-                    true
+                    binding.cardFullAlbumArt.translationX = 0f
+                    binding.layoutSongInfo.translationX = 0f
+                    flingHandled = false
                 }
+                return@OnTouchListener true
+            }
+
+            when (event.action) {
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - startRawX
                     val dy = event.rawY - startRawY
 
-                    if (!isDraggingDown && !isHorizontalSwipe) {
-                        if (dy > 20 && dy > Math.abs(dx) * 1.2) {
-                            isDraggingDown = true
-                            binding.playerBarWrapper.visibility = View.VISIBLE
-                        } else if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy)) {
+                    if (!isDraggingDown && !isDraggingUp && !isHorizontalSwipe) {
+                        if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy) * 1.2) {
                             isHorizontalSwipe = true
+                        } else if (dy > 20 && dy > Math.abs(dx) * 1.2) {
+                            isDraggingDown = true
+                            if (!isShowingLyrics && !wasShowingLyricsOnDown) {
+                                binding.playerBarWrapper.visibility = View.VISIBLE
+                            }
+                        } else if (dy < -20 && Math.abs(dy) > Math.abs(dx) * 1.2 && !isShowingLyrics && !wasShowingLyricsOnDown) {
+                            isDraggingUp = true
                         }
                     }
 
-                    if (isDraggingDown) {
-                        val currentY = maxOf(0f, dy)
-                        binding.fullPlayerContainer.translationY = currentY
-                        val slideDistance = binding.fullPlayerContainer.height.takeIf { it > 0 }?.toFloat()
-                            ?: resources.displayMetrics.heightPixels.toFloat()
-                        binding.playerBarWrapper.alpha = (currentY / slideDistance).coerceIn(0f, 1f)
+                    if (isHorizontalSwipe) {
+                        if (!isShowingLyrics && !wasShowingLyricsOnDown) {
+                            binding.cardFullAlbumArt.translationX = dx * 0.45f
+                            binding.layoutSongInfo.translationX = dx * 0.20f
+                        }
+                        true
+                    } else if (isDraggingDown) {
+                        if (isShowingLyrics || wasShowingLyricsOnDown) {
+                            val currentY = maxOf(0f, dy)
+                            binding.layoutLyricsSection.translationY = currentY * 0.35f
+                        } else {
+                            val currentY = maxOf(0f, dy)
+                            binding.fullPlayerContainer.translationY = currentY
+                            val slideDistance = binding.fullPlayerContainer.height.takeIf { it > 0 }?.toFloat()
+                                ?: resources.displayMetrics.heightPixels.toFloat()
+                            binding.playerBarWrapper.alpha = (currentY / slideDistance).coerceIn(0f, 1f)
+                        }
+                        true
+                    } else if (isDraggingUp) {
+                        binding.layoutCoverSection.translationY = minOf(0f, dy * 0.35f)
                         true
                     } else {
                         false
@@ -1158,35 +1527,53 @@ class MainActivity : AppCompatActivity() {
                     val dx = event.rawX - startRawX
                     val dy = event.rawY - startRawY
 
-                    if (isDraggingDown) {
-                        if (dy > 160) {
-                            closeFullscreenPlayer()
+                    if (isHorizontalSwipe) {
+                        if (dx < -70) {
+                            swipeToNextSong()
+                        } else if (dx > 70) {
+                            swipeToPrevSong()
                         } else {
-                            binding.fullPlayerContainer.animate()
-                                .translationY(0f)
-                                .setDuration(220)
-                                .setInterpolator(DecelerateInterpolator(1.5f))
-                                .start()
-                            binding.playerBarWrapper.animate()
-                                .alpha(0f)
-                                .setDuration(180)
-                                .withEndAction {
-                                    binding.playerBarWrapper.visibility = View.INVISIBLE
-                                }
-                                .start()
-                        }
-                        isDraggingDown = false
-                        true
-                    } else if (isHorizontalSwipe || (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy))) {
-                        if (!isShowingLyrics && dx < 0) {
-                            showLyricsView()
-                        } else if (isShowingLyrics && dx > 0) {
-                            showCoverArtView()
+                            binding.cardFullAlbumArt.animate().translationX(0f).setDuration(200).start()
+                            binding.layoutSongInfo.animate().translationX(0f).setDuration(200).start()
                         }
                         isHorizontalSwipe = false
                         true
-                    } else if (dy > 90 && dy > Math.abs(dx) * 1.2) {
-                        closeFullscreenPlayer()
+                    } else if (isDraggingUp) {
+                        if (dy < -70) {
+                            showLyricsView()
+                        } else {
+                            binding.layoutCoverSection.animate().translationY(0f).setDuration(200).start()
+                        }
+                        isDraggingUp = false
+                        true
+                    } else if (isDraggingDown) {
+                        if (isShowingLyrics || wasShowingLyricsOnDown) {
+                            // Touch started in lyrics -> swiping down ONLY returns to cover, NEVER exits fullscreen
+                            if (dy > 40) {
+                                showCoverArtView()
+                            } else {
+                                binding.layoutLyricsSection.animate().translationY(0f).setDuration(200).start()
+                            }
+                        } else {
+                            // Touch started on cover art -> swiping down closes player
+                            if (dy > 160) {
+                                closeFullscreenPlayer()
+                            } else {
+                                binding.fullPlayerContainer.animate()
+                                    .translationY(0f)
+                                    .setDuration(220)
+                                    .setInterpolator(DecelerateInterpolator(1.5f))
+                                    .start()
+                                binding.playerBarWrapper.animate()
+                                    .alpha(0f)
+                                    .setDuration(180)
+                                    .withEndAction {
+                                        binding.playerBarWrapper.visibility = View.INVISIBLE
+                                    }
+                                    .start()
+                            }
+                        }
+                        isDraggingDown = false
                         true
                     } else {
                         false
@@ -1205,6 +1592,7 @@ class MainActivity : AppCompatActivity() {
         binding.layoutNoLyrics.setOnTouchListener(playerTouchListener)
         binding.layoutLyricsMiniHeader.setOnTouchListener(playerTouchListener)
         binding.tvLyricsHint.setOnTouchListener(playerTouchListener)
+        binding.tvLyricsHint.setOnClickListener { showLyricsView() }
     }
 
     private fun seekRelative(deltaMs: Long) {
@@ -1233,36 +1621,38 @@ class MainActivity : AppCompatActivity() {
         lyricsHintAnimator?.cancel()
         loadLyricsForCurrentSong()
 
-        val width = binding.fullPlayerContainer.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val height = binding.fullPlayerContainer.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
 
         if (!animate) {
             binding.layoutCoverSection.visibility = View.GONE
-            binding.layoutCoverSection.translationX = 0f
+            binding.layoutCoverSection.translationY = 0f
             binding.layoutCoverSection.alpha = 1f
             binding.layoutLyricsSection.visibility = View.VISIBLE
-            binding.layoutLyricsSection.translationX = 0f
+            binding.layoutLyricsSection.translationY = 0f
             binding.layoutLyricsSection.alpha = 1f
             return
         }
 
         binding.layoutLyricsSection.visibility = View.VISIBLE
-        binding.layoutLyricsSection.translationX = width * 0.45f
+        binding.layoutLyricsSection.translationY = height * 0.35f
         binding.layoutLyricsSection.alpha = 0f
 
         binding.layoutCoverSection.animate()
-            .translationX(-width * 0.45f)
+            .translationY(-height * 0.25f)
             .alpha(0f)
-            .setDuration(300)
+            .setDuration(260)
             .setInterpolator(DecelerateInterpolator(1.4f))
             .withEndAction {
                 binding.layoutCoverSection.visibility = View.GONE
+                binding.layoutCoverSection.translationY = 0f
+                binding.layoutCoverSection.alpha = 1f
             }
             .start()
 
         binding.layoutLyricsSection.animate()
-            .translationX(0f)
+            .translationY(0f)
             .alpha(1f)
-            .setDuration(300)
+            .setDuration(260)
             .setInterpolator(DecelerateInterpolator(1.4f))
             .start()
     }
@@ -1272,36 +1662,38 @@ class MainActivity : AppCompatActivity() {
         isShowingLyrics = false
         playLyricsHintBlinkAnimation()
 
-        val width = binding.fullPlayerContainer.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val height = binding.fullPlayerContainer.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
 
         if (!animate) {
             binding.layoutLyricsSection.visibility = View.GONE
-            binding.layoutLyricsSection.translationX = 0f
+            binding.layoutLyricsSection.translationY = 0f
             binding.layoutLyricsSection.alpha = 1f
             binding.layoutCoverSection.visibility = View.VISIBLE
-            binding.layoutCoverSection.translationX = 0f
+            binding.layoutCoverSection.translationY = 0f
             binding.layoutCoverSection.alpha = 1f
             return
         }
 
         binding.layoutCoverSection.visibility = View.VISIBLE
-        binding.layoutCoverSection.translationX = -width * 0.45f
+        binding.layoutCoverSection.translationY = -height * 0.25f
         binding.layoutCoverSection.alpha = 0f
 
         binding.layoutLyricsSection.animate()
-            .translationX(width * 0.45f)
+            .translationY(height * 0.35f)
             .alpha(0f)
-            .setDuration(300)
+            .setDuration(260)
             .setInterpolator(DecelerateInterpolator(1.4f))
             .withEndAction {
                 binding.layoutLyricsSection.visibility = View.GONE
+                binding.layoutLyricsSection.translationY = 0f
+                binding.layoutLyricsSection.alpha = 1f
             }
             .start()
 
         binding.layoutCoverSection.animate()
-            .translationX(0f)
+            .translationY(0f)
             .alpha(1f)
-            .setDuration(300)
+            .setDuration(260)
             .setInterpolator(DecelerateInterpolator(1.4f))
             .start()
     }
@@ -1645,7 +2037,14 @@ class MainActivity : AppCompatActivity() {
         val songMap = allSongs.associateBy { it.id }
         currentPlaylistSongs = songIds.mapNotNull { songMap[it] }
         playlistSongsAdapter.submitList(currentPlaylistSongs)
-        pagerAdapter.openPlaylistDetail(playlistName, currentPlaylistSongs.size, currentPlaylistSongs.firstOrNull())
+
+        val totalSeconds = (currentPlaylistSongs.sumOf { it.durationMs } / 1000).coerceAtLeast(0)
+        val h = totalSeconds / 3600
+        val m = (totalSeconds % 3600) / 60
+        val s = totalSeconds % 60
+        val formattedDuration = if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%d:%02d", m, s)
+
+        pagerAdapter.openPlaylistDetail(playlistName, currentPlaylistSongs.size, currentPlaylistSongs.firstOrNull(), formattedDuration)
     }
 
     private fun playAllPlaylist(playlistName: String) {
@@ -1677,34 +2076,47 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showRenamePlaylistDialog(oldName: String) {
-        val input = android.widget.EditText(this).apply {
-            setText(oldName)
-            selectAll()
-            setPadding(48, 32, 48, 32)
-            setTextColor(android.graphics.Color.WHITE)
-            setHintTextColor(android.graphics.Color.GRAY)
+        val createBinding = DialogCreatePlaylistBinding.inflate(layoutInflater)
+        val dialog = AlertDialog.Builder(this)
+            .setView(createBinding.root)
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        createBinding.tvCreatePlaylistTitle.text = "Rename Playlist"
+        createBinding.tvCreatePlaylistSubtitle.text = "Update collection name"
+        createBinding.tvCreatePlaylistSubmitText.text = "SAVE CHANGES"
+        createBinding.etCreatePlaylistName.setText(oldName)
+        createBinding.etCreatePlaylistName.selectAll()
+
+        createBinding.btnCreatePlaylistClose.setOnClickListener {
+            dialog.dismiss()
         }
 
-        AlertDialog.Builder(this)
-            .setTitle("Rename Playlist")
-            .setView(input)
-            .setPositiveButton("Rename") { _, _ ->
-                val newName = input.text.toString().trim()
-                if (newName.isNotBlank() && newName != oldName) {
-                    val success = PlaylistManager.renamePlaylist(this, oldName, newName)
-                    if (success) {
-                        if (currentOpenPlaylist == oldName) {
-                            currentOpenPlaylist = newName
-                        }
-                        loadPlaylists()
-                        Toast.makeText(this, "Renamed to $newName", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(this, "Playlist with that name already exists", Toast.LENGTH_SHORT).show()
+        createBinding.btnCreatePlaylistCancel.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        createBinding.btnCreatePlaylistSubmit.setOnClickListener {
+            val newName = createBinding.etCreatePlaylistName.text.toString().trim()
+            if (newName.isNotBlank() && newName != oldName) {
+                val success = PlaylistManager.renamePlaylist(this, oldName, newName)
+                if (success) {
+                    if (currentOpenPlaylist == oldName) {
+                        currentOpenPlaylist = newName
                     }
+                    loadPlaylists()
+                    Toast.makeText(this, "Renamed to $newName", Toast.LENGTH_SHORT).show()
+                    dialog.dismiss()
+                } else {
+                    Toast.makeText(this, "Playlist with that name already exists", Toast.LENGTH_SHORT).show()
                 }
+            } else {
+                dialog.dismiss()
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+        }
+
+        dialog.show()
     }
 
     private fun showDeletePlaylistDialog(playlistName: String) {
@@ -1738,13 +2150,25 @@ class MainActivity : AppCompatActivity() {
         // Bind song header preview
         sheetBinding.tvOptionSongTitle.text = song.title
         val subtitle = if (song.album.isNotBlank() && song.album != "Unknown Album") {
-            "${song.artist} • ${song.album}"
+            if (song.year > 0) "${song.artist} • ${song.album} (${song.year})" else "${song.artist} • ${song.album}"
         } else {
-            song.artist
+            if (song.year > 0) "${song.artist} • ${song.year}" else song.artist
         }
         sheetBinding.tvOptionSongSubtitle.text = subtitle
         sheetBinding.tvOptionSongDuration.text = song.durationFormatted
         ThumbnailLoader.loadThumbnail(sheetBinding.ivOptionAlbumArt, song)
+
+        // 0a. Play Next
+        sheetBinding.btnOptionPlayNext.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            addSongToPlayNext(song)
+        }
+
+        // 0b. Add to Queue
+        sheetBinding.btnOptionAddToQueue.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            addSongToEndOfQueue(song)
+        }
 
         // 1. Add to playlist
         sheetBinding.btnOptionAddToPlaylist.setOnClickListener {
@@ -1782,59 +2206,159 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAddToPlaylistDialog(song: Song) {
-        val playlists = PlaylistManager.getPlaylists(this).toMutableList()
-        val options = playlists + "＋ Create New Playlist"
+        val addBinding = DialogAddToPlaylistBinding.inflate(layoutInflater)
+        val dialog = AlertDialog.Builder(this)
+            .setView(addBinding.root)
+            .create()
 
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("Add to Playlist")
-        builder.setItems(options.toTypedArray()) { _, which ->
-            if (which == playlists.size) {
-                showCreatePlaylistDialog(song)
-            } else {
-                val selectedPlaylist = playlists[which]
-                val added = PlaylistManager.addSongToPlaylist(this, selectedPlaylist, song.id)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        addBinding.tvAddSongTitleSubtitle.text = song.title
+
+        addBinding.btnAddPlaylistClose.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        addBinding.btnCreateNewPlaylistFromAdd.setOnClickListener {
+            dialog.dismiss()
+            showCreatePlaylistDialog(song)
+        }
+
+        val playlists = PlaylistManager.getPlaylistInfos(this, allSongs)
+        val existingPlaylists = PlaylistManager.getPlaylistsContainingSong(this, song.id)
+
+        if (playlists.isEmpty()) {
+            addBinding.tvNoPlaylistsHint.visibility = View.VISIBLE
+            addBinding.rvAddToPlaylist.visibility = View.GONE
+        } else {
+            addBinding.tvNoPlaylistsHint.visibility = View.GONE
+            addBinding.rvAddToPlaylist.visibility = View.VISIBLE
+            addBinding.rvAddToPlaylist.layoutManager = LinearLayoutManager(this)
+
+            val adapter = AddToPlaylistAdapter(existingPlaylists) { selectedPlaylist ->
+                val added = PlaylistManager.addSongToPlaylist(this, selectedPlaylist.name, song.id)
                 if (added) {
+                    window.decorView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     loadPlaylists()
-                    Toast.makeText(this, "Added to $selectedPlaylist", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Added to ${selectedPlaylist.name}", Toast.LENGTH_SHORT).show()
+                    dialog.dismiss()
                 } else {
-                    Toast.makeText(this, "Already in $selectedPlaylist", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Already in ${selectedPlaylist.name}", Toast.LENGTH_SHORT).show()
                 }
             }
+            adapter.submitList(playlists)
+            addBinding.rvAddToPlaylist.adapter = adapter
         }
-        builder.setNegativeButton("Cancel", null)
-        builder.show()
+
+        dialog.show()
     }
 
     private fun showCreatePlaylistDialog(song: Song? = null) {
-        val input = android.widget.EditText(this).apply {
-            hint = "Playlist Name"
-            setPadding(48, 32, 48, 32)
-            setTextColor(android.graphics.Color.WHITE)
-            setHintTextColor(android.graphics.Color.GRAY)
+        val createBinding = DialogCreatePlaylistBinding.inflate(layoutInflater)
+        val dialog = AlertDialog.Builder(this)
+            .setView(createBinding.root)
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        createBinding.btnCreatePlaylistClose.setOnClickListener {
+            dialog.dismiss()
         }
 
-        AlertDialog.Builder(this)
-            .setTitle("New Playlist")
-            .setView(input)
-            .setPositiveButton("Create") { _, _ ->
-                val name = input.text.toString().trim()
-                if (name.isNotBlank()) {
-                    val created = PlaylistManager.createPlaylist(this, name)
-                    if (created) {
-                        if (song != null) {
-                            PlaylistManager.addSongToPlaylist(this, name, song.id)
-                            Toast.makeText(this, "Created & Added to $name", Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(this, "Created playlist \"$name\"", Toast.LENGTH_SHORT).show()
-                        }
-                        loadPlaylists()
+        createBinding.btnCreatePlaylistCancel.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        createBinding.btnCreatePlaylistSubmit.setOnClickListener {
+            val name = createBinding.etCreatePlaylistName.text.toString().trim()
+            if (name.isNotBlank()) {
+                val created = PlaylistManager.createPlaylist(this, name)
+                if (created) {
+                    if (song != null) {
+                        PlaylistManager.addSongToPlaylist(this, name, song.id)
+                        Toast.makeText(this, "Created & Added to $name", Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(this, "Playlist already exists", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Created playlist \"$name\"", Toast.LENGTH_SHORT).show()
                     }
+                    loadPlaylists()
+                    dialog.dismiss()
+                } else {
+                    Toast.makeText(this, "Playlist with that name already exists", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(this, "Please enter a playlist name", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun showAddSongsToPlaylistDialog(playlistName: String) {
+        val selectBinding = DialogSelectSongsForPlaylistBinding.inflate(layoutInflater)
+        val dialog = AlertDialog.Builder(this)
+            .setView(selectBinding.root)
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        selectBinding.tvSelectSongsTitle.text = "Add Tracks to \"$playlistName\""
+        selectBinding.tvSelectSongsSubtitle.text = "Tap any track to add it to this playlist"
+
+        selectBinding.btnSelectSongsClose.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        val songAdapter = SongAdapter(
+            onSongClicked = { song, _ ->
+                val added = PlaylistManager.addSongToPlaylist(this, playlistName, song.id)
+                if (added) {
+                    window.decorView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    refreshCurrentPlaylistSongs(playlistName)
+                    loadPlaylists()
+                    Toast.makeText(this, "Added \"${song.title}\" to $playlistName", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "\"${song.title}\" is already in $playlistName", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onSongLongClicked = { _, _ -> }
+        )
+
+        selectBinding.rvSelectSongsList.layoutManager = LinearLayoutManager(this)
+        selectBinding.rvSelectSongsList.adapter = songAdapter
+        songAdapter.submitList(allSongs)
+
+        selectBinding.etSearchSongsToAdd.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val q = s?.toString()?.trim() ?: ""
+                if (q.isBlank()) {
+                    songAdapter.submitList(allSongs)
+                } else {
+                    val filtered = allSongs.filter {
+                        it.title.contains(q, ignoreCase = true) || it.artist.contains(q, ignoreCase = true)
+                    }
+                    songAdapter.submitList(filtered)
                 }
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
+        dialog.show()
+    }
+
+    private fun downloadCoverBytes(urlStr: String): ByteArray? {
+        return try {
+            val conn = URL(urlStr).openConnection() as HttpURLConnection
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 10_000
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("User-Agent", "Mewsic/1.0.0")
+            if (conn.responseCode in 200..299) {
+                conn.inputStream.use { it.readBytes() }
+            } else null
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun showEditSongDialog(song: Song) {
@@ -1848,43 +2372,320 @@ class MainActivity : AppCompatActivity() {
         editBinding.etEditTitle.setText(song.title)
         editBinding.etEditArtist.setText(if (song.artist != "Unknown Artist") song.artist else "")
         editBinding.etEditAlbum.setText(if (song.album != "Unknown Album") song.album else "")
+        editBinding.etEditGenre.setText(song.genre)
+        editBinding.etEditYear.setText(if (song.year > 0) song.year.toString() else "")
+
+        // Initial cover preview from thumbnail loader
+        ThumbnailLoader.loadThumbnail(editBinding.ivEditCoverPreview, song)
+
+        var pendingCoverBytes: ByteArray? = null
+        var pendingCoverBitmap: Bitmap? = null
+
+        fun updateBadge(text: String) {
+            val hasTimestamps = Regex("""\[\d{1,2}:\d{2}""").containsMatchIn(text)
+            when {
+                hasTimestamps -> {
+                    editBinding.tvEditLyricsBadge.text = "Synced (LRC)"
+                    editBinding.tvEditLyricsBadge.visibility = View.VISIBLE
+                }
+                text.isNotBlank() -> {
+                    editBinding.tvEditLyricsBadge.text = "Plain"
+                    editBinding.tvEditLyricsBadge.visibility = View.VISIBLE
+                }
+                else -> {
+                    editBinding.tvEditLyricsBadge.text = "No Lyrics"
+                    editBinding.tvEditLyricsBadge.visibility = View.VISIBLE
+                }
+            }
+        }
+
+        // Fetch existing raw lyrics in background
+        lifecycleScope.launch {
+            val raw = LyricsExtractor.getRawLyrics(this@MainActivity, song)
+            if (!raw.isNullOrBlank()) {
+                editBinding.etEditLyrics.setText(raw)
+                updateBadge(raw)
+            } else {
+                updateBadge("")
+            }
+        }
+
+        editBinding.etEditLyrics.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                updateBadge(s?.toString() ?: "")
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
+        editBinding.btnEditClose.setOnClickListener {
+            dialog.dismiss()
+        }
 
         editBinding.btnEditCancel.setOnClickListener {
             dialog.dismiss()
         }
 
+        // Local File Picker
+        editBinding.btnEditLocalFile.setOnClickListener {
+            onImagePickedCallback = { uri ->
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        if (bytes != null && bytes.isNotEmpty()) {
+                            val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            if (bmp != null) {
+                                pendingCoverBytes = bytes
+                                pendingCoverBitmap = bmp
+                                withContext(Dispatchers.Main) {
+                                    editBinding.ivEditCoverPreview.setImageBitmap(bmp)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+            pickImageLauncher.launch("image/*")
+        }
+
+        // Fetch Cover from online
+        editBinding.btnEditFetchCover.setOnClickListener {
+            val title = editBinding.etEditTitle.text.toString().trim().ifEmpty { song.title }
+            val artist = editBinding.etEditArtist.text.toString().trim().ifEmpty { song.artist }
+            val q = "$artist $title".trim()
+            editBinding.pbEditLoading.visibility = View.VISIBLE
+            lifecycleScope.launch(Dispatchers.IO) {
+                var tracks = HarbourSearchEngine.search(q, "itunes")
+                if (tracks.isEmpty()) {
+                    tracks = HarbourSearchEngine.search(q, "jiosaavn")
+                }
+                val coverUrl = tracks.firstOrNull { it.coverArtUrl.isNotBlank() }?.coverArtUrl
+                var bmp: Bitmap? = null
+                var bytes: ByteArray? = null
+                if (!coverUrl.isNullOrBlank()) {
+                    bytes = downloadCoverBytes(coverUrl)
+                    if (bytes != null) {
+                        bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    }
+                }
+                withContext(Dispatchers.Main) {
+                    editBinding.pbEditLoading.visibility = View.GONE
+                    if (bmp != null && bytes != null) {
+                        pendingCoverBytes = bytes
+                        pendingCoverBitmap = bmp
+                        editBinding.ivEditCoverPreview.setImageBitmap(bmp)
+                        Toast.makeText(this@MainActivity, "Cover art fetched", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this@MainActivity, "No cover art found", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        // Fetch Lyrics
+        editBinding.btnEditFetchLyrics.setOnClickListener {
+            val title = editBinding.etEditTitle.text.toString().trim().ifEmpty { song.title }
+            val artist = editBinding.etEditArtist.text.toString().trim().ifEmpty { song.artist }
+            val album = editBinding.etEditAlbum.text.toString().trim()
+            editBinding.pbEditLoading.visibility = View.VISIBLE
+            lifecycleScope.launch(Dispatchers.IO) {
+                val lyrics = HarbourLyricsService.fetchLyrics(
+                    title = title,
+                    artist = artist,
+                    album = album,
+                    durationSeconds = song.durationMs / 1000.0
+                )
+                withContext(Dispatchers.Main) {
+                    editBinding.pbEditLoading.visibility = View.GONE
+                    if (!lyrics.isNullOrBlank()) {
+                        editBinding.etEditLyrics.setText(lyrics)
+                        updateBadge(lyrics)
+                        Toast.makeText(this@MainActivity, "Lyrics fetched", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this@MainActivity, "No lyrics found online", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        // Fetch All Metadata
+        editBinding.btnEditFetchMetadata.setOnClickListener {
+            val title = editBinding.etEditTitle.text.toString().trim().ifEmpty { song.title }
+            val artist = editBinding.etEditArtist.text.toString().trim().ifEmpty { song.artist }
+            val q = "$artist $title".trim()
+            editBinding.pbEditLoading.visibility = View.VISIBLE
+            lifecycleScope.launch(Dispatchers.IO) {
+                var tracks = HarbourSearchEngine.search(q, "itunes")
+                if (tracks.isEmpty()) {
+                    tracks = HarbourSearchEngine.search(q, "jiosaavn")
+                }
+                val best = tracks.firstOrNull()
+                val coverUrl = best?.coverArtUrl
+                var coverBytes: ByteArray? = null
+                var coverBmp: Bitmap? = null
+                if (!coverUrl.isNullOrBlank()) {
+                    coverBytes = downloadCoverBytes(coverUrl)
+                    if (coverBytes != null) {
+                        coverBmp = BitmapFactory.decodeByteArray(coverBytes, 0, coverBytes.size)
+                    }
+                }
+                val fetchedLyrics = HarbourLyricsService.fetchLyrics(
+                    title = best?.title ?: title,
+                    artist = best?.artist ?: artist,
+                    album = best?.album ?: "",
+                    durationSeconds = song.durationMs / 1000.0
+                )
+                withContext(Dispatchers.Main) {
+                    editBinding.pbEditLoading.visibility = View.GONE
+                    if (best != null) {
+                        editBinding.etEditTitle.setText(best.title)
+                        editBinding.etEditArtist.setText(best.artist)
+                        if (best.album.isNotBlank()) editBinding.etEditAlbum.setText(best.album)
+                        if (best.year.isNotBlank()) editBinding.etEditYear.setText(best.year)
+                        if (best.genre.isNotBlank()) editBinding.etEditGenre.setText(best.genre)
+                    }
+                    if (coverBmp != null && coverBytes != null) {
+                        pendingCoverBytes = coverBytes
+                        pendingCoverBitmap = coverBmp
+                        editBinding.ivEditCoverPreview.setImageBitmap(coverBmp)
+                    }
+                    if (!fetchedLyrics.isNullOrBlank()) {
+                        editBinding.etEditLyrics.setText(fetchedLyrics)
+                        updateBadge(fetchedLyrics)
+                    }
+                    Toast.makeText(this@MainActivity, "Metadata fetched", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        // Save
         editBinding.btnEditSave.setOnClickListener {
             val newTitle = editBinding.etEditTitle.text.toString().trim()
+            if (newTitle.isBlank()) {
+                Toast.makeText(this, "Title cannot be blank", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             val newArtist = editBinding.etEditArtist.text.toString().trim().ifEmpty { "Unknown Artist" }
             val newAlbum = editBinding.etEditAlbum.text.toString().trim().ifEmpty { "Unknown Album" }
+            val newGenre = editBinding.etEditGenre.text.toString().trim()
+            val newYear = editBinding.etEditYear.text.toString().trim()
+            val newLyrics = editBinding.etEditLyrics.text.toString().trim()
 
-            if (newTitle.isNotBlank()) {
+            editBinding.pbEditLoading.visibility = View.VISIBLE
+            editBinding.btnEditSave.isEnabled = false
+
+            lifecycleScope.launch(Dispatchers.IO) {
+                // 1. Embed audio tags directly into file
+                var writeSuccess = false
+                try {
+                    val file = File(song.filePath)
+                    if (file.exists() && file.canWrite()) {
+                        val rawBytes = file.readBytes()
+                        val ext = file.extension.ifBlank { "mp3" }
+                        val updatedBytes = AudioTagEmbedder.embed(
+                            audioBytes = rawBytes,
+                            extension = ext,
+                            title = newTitle,
+                            artist = newArtist,
+                            album = newAlbum,
+                            year = newYear,
+                            genre = newGenre,
+                            lyrics = newLyrics.takeIf { it.isNotBlank() },
+                            coverArtBytes = pendingCoverBytes
+                        )
+                        file.writeBytes(updatedBytes)
+                        writeSuccess = true
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
+                if (!writeSuccess) {
+                    try {
+                        val rawBytes = contentResolver.openInputStream(song.contentUri)?.use { it.readBytes() }
+                        if (rawBytes != null && rawBytes.isNotEmpty()) {
+                            val ext = song.filePath.substringAfterLast('.', "mp3")
+                            val updatedBytes = AudioTagEmbedder.embed(
+                                audioBytes = rawBytes,
+                                extension = ext,
+                                title = newTitle,
+                                artist = newArtist,
+                                album = newAlbum,
+                                year = newYear,
+                                genre = newGenre,
+                                lyrics = newLyrics.takeIf { it.isNotBlank() },
+                                coverArtBytes = pendingCoverBytes
+                            )
+                            contentResolver.openOutputStream(song.contentUri, "wt")?.use { out ->
+                                out.write(updatedBytes)
+                                writeSuccess = true
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                // 2. Update MediaStore values
+                try {
+                    val values = ContentValues().apply {
+                        put(MediaStore.Audio.Media.TITLE, newTitle)
+                        put(MediaStore.Audio.Media.ARTIST, newArtist)
+                        put(MediaStore.Audio.Media.ALBUM, newAlbum)
+                        if (newYear.isNotBlank()) {
+                            newYear.toIntOrNull()?.let { put(MediaStore.Audio.Media.YEAR, it) }
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && newGenre.isNotBlank()) {
+                            put(MediaStore.Audio.Media.GENRE, newGenre)
+                        }
+                    }
+                    contentResolver.update(song.contentUri, values, null, null)
+                } catch (_: Exception) {}
+
+                // 3. Save lyrics sidecar & internal cache
+                if (newLyrics.isNotBlank()) {
+                    LyricsExtractor.saveLyrics(this@MainActivity, song, newLyrics)
+                }
+
+                // 4. Update thumbnail caches
+                if (pendingCoverBitmap != null) {
+                    ThumbnailLoader.updateCachedBitmap(song.id, pendingCoverBitmap!!)
+                } else {
+                    ThumbnailLoader.invalidate(song.id)
+                }
+
+                // 5. Update data models
                 val updatedSong = song.copy(
                     title = newTitle,
                     artist = newArtist,
-                    album = newAlbum
+                    album = newAlbum,
+                    year = newYear.toIntOrNull() ?: 0,
+                    genre = newGenre
                 )
-
-                // Update datasets in-memory and disk cache
                 allSongs = allSongs.map { if (it.id == song.id) updatedSong else it }
-                applySongsToUI(allSongs)
-                lifecycleScope.launch {
-                    LibraryCache.saveCachedSongs(this@MainActivity, allSongs)
-                }
+                LibraryCache.saveCachedSongs(this@MainActivity, allSongs)
 
-                // Update current playing view if applicable
-                if (currentPlayingSong?.id == song.id) {
-                    currentPlayingSong = updatedSong
-                    binding.tvPlayerTitle.text = newTitle
-                    binding.tvPlayerArtist.text = newArtist
-                    binding.tvFullTitle.text = newTitle
-                    binding.tvFullArtist.text = newArtist
-                }
+                withContext(Dispatchers.Main) {
+                    applySongsToUI(allSongs)
 
-                Toast.makeText(this, "Updated \"$newTitle\"", Toast.LENGTH_SHORT).show()
-                dialog.dismiss()
-            } else {
-                Toast.makeText(this, "Title cannot be blank", Toast.LENGTH_SHORT).show()
+                    if (currentPlayingSong?.id == song.id) {
+                        currentPlayingSong = updatedSong
+                        binding.tvPlayerTitle.text = newTitle
+                        binding.tvPlayerArtist.text = newArtist
+                        binding.tvFullTitle.text = newTitle
+                        binding.tvFullArtist.text = newArtist
+                        if (pendingCoverBitmap != null) {
+                            binding.ivPlayerAlbumArt.setImageBitmap(pendingCoverBitmap)
+                            binding.ivFullAlbumArt.setImageBitmap(pendingCoverBitmap)
+                        }
+                        loadLyricsForCurrentSong()
+                    }
+
+                    Toast.makeText(this@MainActivity, "Metadata saved", Toast.LENGTH_SHORT).show()
+                    dialog.dismiss()
+                }
             }
         }
 
@@ -1907,6 +2708,10 @@ class MainActivity : AppCompatActivity() {
             val file = java.io.File(song.filePath)
             if (file.exists()) {
                 file.delete()
+                val base = song.filePath.substringBeforeLast('.')
+                java.io.File("$base.lrc").delete()
+                java.io.File("$base.meta.json").delete()
+                java.io.File("$base.jpg").delete()
             }
             contentResolver.delete(song.contentUri, null, null)
         } catch (e: Exception) {
@@ -1914,6 +2719,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Remove from list and update UI
+        playbackQueue.removeAll { it.id == song.id }
+        currentQueueIndex = playbackQueue.indexOfFirst { it.id == currentPlayingSong?.id }
         allSongs = allSongs.filter { it.id != song.id }
         applySongsToUI(allSongs)
         lifecycleScope.launch {

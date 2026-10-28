@@ -404,24 +404,51 @@
                     android:textSize="12sp" />
             </LinearLayout>
 
-            <!-- Right Action: More Options Button -->
-            <FrameLayout
-                android:id="@+id/btnFullPlayerMore"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+            <!-- Right Actions: Queue & More Options -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:layout_gravity="end|center_vertical"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true">
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-                <ImageView
-                    android:layout_width="22dp"
-                    android:layout_height="22dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="@string/content_desc_more"
-                    android:src="@drawable/ic_more_vert"
-                    app:tint="@color/text_primary" />
-            </FrameLayout>
+                <!-- Queue Button -->
+                <FrameLayout
+                    android:id="@+id/btnFullPlayerQueue"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <ImageView
+                        android:id="@+id/ivFullPlayerQueue"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="Up Next Queue"
+                        android:src="@drawable/ic_queue_music"
+                        app:tint="@color/text_primary" />
+                </FrameLayout>
+
+                <!-- More Options Button -->
+                <FrameLayout
+                    android:id="@+id/btnFullPlayerMore"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <ImageView
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="@string/content_desc_more"
+                        android:src="@drawable/ic_more_vert"
+                        app:tint="@color/text_primary" />
+                </FrameLayout>
+            </LinearLayout>
         </FrameLayout>
 
         <!-- 2. Cover Art & Track Info Section -->
@@ -465,7 +492,7 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Swipe Left For Lyrics Hint (Fading blink indicator, non-tappable) -->
+            <!-- Swipe Up For Lyrics Hint (Fading blink indicator, non-tappable) -->
             <TextView
                 android:id="@+id/tvLyricsHint"
                 android:layout_width="wrap_content"
@@ -480,7 +507,7 @@
                 android:paddingTop="5dp"
                 android:paddingEnd="14dp"
                 android:paddingBottom="5dp"
-                android:text="swipe left for lyrics &lt;-"
+                android:text="swipe up for lyrics ↑"
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 android:alpha="0.38"

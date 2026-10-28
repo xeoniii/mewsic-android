@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/containerAddToPlaylistItem"
+    android:layout_width="match_parent"
+    android:layout_height="60dp"
+    android:layout_marginTop="2dp"
+    android:layout_marginBottom="2dp"
+    android:background="@drawable/bg_song_card_idle"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp">
+
+    <!-- Green Icon Badge with (+) Circle Icon -->
+    <FrameLayout
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="@drawable/bg_green_icon_badge">
+
+        <ImageView
+            android:id="@+id/ivAddToPlaylistIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_add_circle_outline"
+            app:tint="#1ADA6B" />
+    </FrameLayout>
+
+    <!-- Playlist Name & Count -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="14dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvAddToPlaylistName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-bold"
+            android:maxLines="1"
+            android:textColor="#FFFFFF"
+            android:textSize="14.5sp"
+            tools:text="con." />
+
+        <TextView
+            android:id="@+id/tvAddToPlaylistTrackCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:fontFamily="sans-serif"
+            android:textColor="#8E9BAE"
+            android:textSize="11.5sp"
+            tools:text="15 tracks" />
+    </LinearLayout>
+
+    <!-- Optional Indicator if already present -->
+    <TextView
+        android:id="@+id/tvAddedBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_badge_synced"
+        android:fontFamily="sans-serif-bold"
+        android:paddingStart="8dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="2dp"
+        android:text="In Playlist"
+        android:textColor="#1ADA6B"
+        android:textSize="10.5sp"
+        android:visibility="gone" />
+
+</LinearLayout>

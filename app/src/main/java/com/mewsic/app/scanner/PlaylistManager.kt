@@ -49,6 +49,11 @@ object PlaylistManager {
         return added
     }
 
+    fun getPlaylistsContainingSong(context: Context, songId: Long): Set<String> {
+        val map = loadPlaylistMap(context)
+        return map.filter { it.value.contains(songId) }.keys
+    }
+
     fun removeSongFromPlaylist(context: Context, playlistName: String, songId: Long): Boolean {
         val map = loadPlaylistMap(context)
         val set = map[playlistName] ?: return false

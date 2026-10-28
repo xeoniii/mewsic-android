@@ -70,6 +70,18 @@ object ThumbnailLoader {
         isListThumbnailLoadingPaused = false
     }
 
+    fun invalidate(songId: Long) {
+        thumbCache.remove(songId)
+        highResCache.remove(songId)
+        blurCache.remove(songId)
+    }
+
+    fun updateCachedBitmap(songId: Long, bitmap: Bitmap) {
+        thumbCache.put(songId, bitmap)
+        highResCache.put(songId, bitmap)
+        blurCache.remove(songId)
+    }
+
     fun loadThumbnail(imageView: ImageView, song: Song) {
         if (isListThumbnailLoadingPaused) {
             imageView.setImageDrawable(null)
@@ -172,6 +184,25 @@ object ThumbnailLoader {
      * Decodes original uncompressed artwork directly from the media file or MediaStore at full resolution
      */
     fun loadHighResBitmap(context: Context, song: Song, targetSize: Int = 2560): Bitmap? {
+        // Priority 0: Sidecar cover art image (.jpg, .jpeg, .png, .webp) or internal covers cache
+        if (song.filePath.isNotBlank()) {
+            val base = song.filePath.substringBeforeLast('.')
+            for (ext in listOf("jpg", "jpeg", "png", "webp")) {
+                val sidecar = File("$base.$ext")
+                if (sidecar.exists() && sidecar.canRead() && sidecar.length() > 0) {
+                    val bm = decodeSampledBitmapFromFile(sidecar.absolutePath, targetSize)
+                    if (bm != null) return bm
+                }
+            }
+            // Check app internal covers cache
+            val name = File(song.filePath).nameWithoutExtension
+            val internalCover = File(context.filesDir, "covers/$name.jpg")
+            if (internalCover.exists() && internalCover.canRead() && internalCover.length() > 0) {
+                val bm = decodeSampledBitmapFromFile(internalCover.absolutePath, targetSize)
+                if (bm != null) return bm
+            }
+        }
+
         // Priority 1: Direct FileDescriptor via MediaMetadataRetriever on contentUri (Scoped Storage safe)
         try {
             val mmr = MediaMetadataRetriever()
@@ -283,6 +314,30 @@ object ThumbnailLoader {
             return BitmapFactory.decodeByteArray(data, 0, data.size, decodeOptions)
         } catch (_: Throwable) {
             return null
+        }
+    }
+
+    private fun decodeSampledBitmapFromFile(path: String, targetSize: Int): Bitmap? {
+        return try {
+            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(path, options)
+            val width = options.outWidth
+            val height = options.outHeight
+            if (width <= 0 || height <= 0) return null
+
+            var inSampleSize = 1
+            val maxDim = maxOf(width, height)
+            while ((maxDim / (inSampleSize * 2)) >= targetSize) {
+                inSampleSize *= 2
+            }
+
+            val decodeOptions = BitmapFactory.Options().apply {
+                this.inSampleSize = inSampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            BitmapFactory.decodeFile(path, decodeOptions)
+        } catch (_: Throwable) {
+            null
         }
     }
 
@@ -503,6 +558,25 @@ object ThumbnailLoader {
     }
 
     private fun loadBitmap(context: Context, song: Song): Bitmap? {
+        // Method 0: Sidecar cover art image or internal covers cache
+        if (song.filePath.isNotBlank()) {
+            val base = song.filePath.substringBeforeLast('.')
+            for (ext in listOf("jpg", "jpeg", "png", "webp")) {
+                val sidecar = File("$base.$ext")
+                if (sidecar.exists() && sidecar.canRead() && sidecar.length() > 0) {
+                    val bm = decodeSampledBitmapFromFile(sidecar.absolutePath, 128)
+                    if (bm != null) return bm
+                }
+            }
+            // Check app internal covers cache
+            val name = File(song.filePath).nameWithoutExtension
+            val internalCover = File(context.filesDir, "covers/$name.jpg")
+            if (internalCover.exists() && internalCover.canRead() && internalCover.length() > 0) {
+                val bm = decodeSampledBitmapFromFile(internalCover.absolutePath, 128)
+                if (bm != null) return bm
+            }
+        }
+
         // Method 1: API 29+ contentResolver.loadThumbnail
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
@@ -520,19 +594,38 @@ object ThumbnailLoader {
             }
         } catch (_: Exception) {}
 
-        // Method 3: MediaMetadataRetriever embedded picture
-        if (song.filePath.isNotBlank()) {
+        // Method 3: MediaMetadataRetriever embedded picture (Scoped Storage safe)
+        try {
+            val mmr = MediaMetadataRetriever()
+            var opened = false
             try {
-                val mmr = MediaMetadataRetriever()
-                mmr.setDataSource(song.filePath)
+                context.contentResolver.openFileDescriptor(song.contentUri, "r")?.use { pfd ->
+                    mmr.setDataSource(pfd.fileDescriptor)
+                    opened = true
+                }
+            } catch (_: Throwable) {}
+
+            if (!opened && song.filePath.isNotBlank()) {
+                try {
+                    val file = File(song.filePath)
+                    if (file.exists() && file.canRead()) {
+                        mmr.setDataSource(file.absolutePath)
+                        opened = true
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            if (opened) {
                 val rawArt = mmr.embeddedPicture
                 mmr.release()
-                if (rawArt != null) {
-                    val bm = BitmapFactory.decodeByteArray(rawArt, 0, rawArt.size)
+                if (rawArt != null && rawArt.isNotEmpty()) {
+                    val bm = decodeSampledBitmap(rawArt, 128)
                     if (bm != null) return bm
                 }
-            } catch (_: Exception) {}
-        }
+            } else {
+                mmr.release()
+            }
+        } catch (_: Throwable) {}
 
         return null
     }
